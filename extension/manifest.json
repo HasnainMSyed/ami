@@ -1,0 +1,43 @@
+{
+  "manifest_version": 3,
+  "name": "ami",
+  "version": "0.1.0",
+  "description": "A companion that helps you stop doomscrolling on YouTube and Bilibili.",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "permissions": ["storage"],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "*://*.youtube.com/*",
+    "*://*.bilibili.com/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.youtube.com/*", "*://*.bilibili.com/*"],
+      "exclude_matches": ["*://*.youtube.com/embed/*", "*://player.bilibili.com/*"],
+      "js": ["lib/page.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["ui/*.css", "fonts/*.woff2"],
+      "matches": ["*://*.youtube.com/*", "*://*.bilibili.com/*"]
+    }
+  ],
+  "options_ui": { "page": "options.html", "open_in_tab": true },
+  "storage": { "managed_schema": "managed_schema.json" },
+  "incognito": "spanning",
+  "browser_specific_settings": {
+    "gecko": { "id": "ami-companion@ami.local", "strict_min_version": "121.0" }
+  }
+}

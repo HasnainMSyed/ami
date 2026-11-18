@@ -1,0 +1,76 @@
+/* ami design tokens.
+   Shared by the extension overlay (inside a Shadow DOM) and ui/preview.html.
+   Scope everything to .ami-root so host pages (YouTube, Bilibili) can't collide.
+   Theme: .ami-root[data-theme] wins; otherwise prefers-color-scheme decides. */
+
+.ami-root {
+  /* "ami-*" faces are bundled with the extension; the preview page loads Inter from Google Fonts. */
+  --ami-font: "ami-inter", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ami-font-display: "ami-grotesk", "Space Grotesk", "ami-inter", "Inter", system-ui, sans-serif;
+
+  --ami-glass: rgba(250, 251, 252, 0.74);
+  --ami-glass-strong: rgba(250, 251, 252, 0.9);
+  --ami-glass-border: rgba(255, 255, 255, 0.65);
+  --ami-fg: #14181b;
+  --ami-muted: #5b646c;
+  --ami-hairline: rgba(20, 24, 27, 0.09);
+  --ami-field: rgba(20, 24, 27, 0.05);
+  --ami-scrim: rgba(12, 14, 16, 0.36);
+  --ami-shadow: 0 1px 2px rgba(0, 0, 0, 0.06), 0 14px 34px rgba(15, 20, 25, 0.16), 0 36px 90px rgba(15, 20, 25, 0.14);
+
+  --ami-accent: #0b7a6b;
+  --ami-accent-fg: #ffffff;
+  --ami-accent-soft: rgba(11, 122, 107, 0.12);
+  --ami-bubble-ami: rgba(20, 24, 27, 0.06);
+
+  /* Escalation hues: the orb and level accents warm up as time goes on. */
+  --ami-l1: #14a38b;
+  --ami-l2: #e29a2d;
+  --ami-l3: #e5653f;
+  --ami-l4: #c93c62;
+
+  --ami-radius-lg: 22px;
+  --ami-radius-md: 14px;
+  --ami-radius-sm: 10px;
+  --ami-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --ami-dur: 280ms;
+
+  color: var(--ami-fg);
+  font-family: var(--ami-font);
+  -webkit-font-smoothing: antialiased;
+}
+
+@media (prefers-color-scheme: dark) {
+  .ami-root:not([data-theme="light"]) {
+    --ami-glass: rgba(26, 30, 34, 0.72);
+    --ami-glass-strong: rgba(26, 30, 34, 0.9);
+    --ami-glass-border: rgba(255, 255, 255, 0.08);
+    --ami-fg: #eef1f3;
+    --ami-muted: #9aa4ad;
+    --ami-hairline: rgba(255, 255, 255, 0.09);
+    --ami-field: rgba(255, 255, 255, 0.06);
+    --ami-scrim: rgba(0, 0, 0, 0.5);
+    --ami-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px rgba(0, 0, 0, 0.35), 0 36px 90px rgba(0, 0, 0, 0.35);
+    --ami-accent: #4cc9b0;
+    --ami-accent-fg: #062520;
+    --ami-accent-soft: rgba(76, 201, 176, 0.16);
+    --ami-bubble-ami: rgba(255, 255, 255, 0.07);
+    color-scheme: dark;
+  }
+}
+.ami-root[data-theme="dark"] {
+  --ami-glass: rgba(26, 30, 34, 0.72);
+  --ami-glass-strong: rgba(26, 30, 34, 0.9);
+  --ami-glass-border: rgba(255, 255, 255, 0.08);
+  --ami-fg: #eef1f3;
+  --ami-muted: #9aa4ad;
+  --ami-hairline: rgba(255, 255, 255, 0.09);
+  --ami-field: rgba(255, 255, 255, 0.06);
+  --ami-scrim: rgba(0, 0, 0, 0.5);
+  --ami-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 14px 34px rgba(0, 0, 0, 0.35), 0 36px 90px rgba(0, 0, 0, 0.35);
+  --ami-accent: #4cc9b0;
+  --ami-accent-fg: #062520;
+  --ami-accent-soft: rgba(76, 201, 176, 0.16);
+  --ami-bubble-ami: rgba(255, 255, 255, 0.07);
+  color-scheme: dark;
+}

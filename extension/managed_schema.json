@@ -1,0 +1,7 @@
+{
+  "type": "object",
+  "properties": {
+    "daemonUrl": { "type": "string", "description": "ami daemon URL, e.g. http://127.0.0.1:47821" },
+    "token": { "type": "string", "description": "Token printed by `ami --print-token`" }
+  }
+}

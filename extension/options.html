@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ami settings</title>
+  <link rel="stylesheet" href="ui/tokens.css">
+  <link rel="stylesheet" href="ui/overlay.css">
+  <style>
+    @font-face { font-family: "ami-inter"; src: url("fonts/inter.woff2") format("woff2"); font-weight: 300 700; }
+    @font-face { font-family: "ami-grotesk"; src: url("fonts/space-grotesk.woff2") format("woff2"); font-weight: 300 700; }
+    html, body { margin: 0; min-height: 100%; }
+    body.ami-root { background: radial-gradient(80% 60% at 20% 0%, var(--ami-accent-soft), transparent 70%), var(--ami-field); background-color: color-mix(in oklab, var(--ami-fg) 4%, Canvas); display: grid; place-items: center; padding: 48px 16px; }
+    .ami-card { width: min(480px, 100%); }
+    .status { font: 500 13px/1.4 var(--ami-font); padding: 10px 12px; border-radius: 10px; background: var(--ami-field); color: var(--ami-muted); }
+    .status.ok { color: var(--ami-accent); background: var(--ami-accent-soft); }
+    .status.bad { color: var(--ami-l3); }
+    code { font: 12.5px ui-monospace, monospace; padding: 1px 5px; border-radius: 5px; background: var(--ami-field); }
+    .hint { font: 400 12.5px/1.45 var(--ami-font); color: var(--ami-muted); margin: 0; }
+  </style>
+</head>
+<body class="ami-root" data-level="1">
+  <form class="ami-card ami-glass" id="form">
+    <header><span class="ami-orb"></span><div><span class="ami-eyebrow">Settings</span><p class="ami-title">Connect ami</p></div></header>
+    <label class="ami-label" for="url">Service address
+      <input class="ami-field" id="url" autocomplete="off" spellcheck="false"></label>
+    <label class="ami-label" for="token">Token
+      <input class="ami-field" id="token" type="password" autocomplete="off" spellcheck="false" placeholder="Paste the output of: ami --print-token"></label>
+    <p class="hint">Run <code>cd ~/projects/ami/daemon &amp;&amp; uv run ami --print-token</code> to get it.</p>
+    <div class="status" id="status" role="status">Not checked yet.</div>
+    <div class="ami-row" style="justify-content:flex-end">
+      <button type="button" class="ami-btn ami-btn-ghost" id="grant" hidden>Allow site access</button>
+      <button type="button" class="ami-btn ami-btn-ghost" id="test">Test connection</button>
+      <button type="submit" class="ami-btn ami-btn-primary">Save</button>
+    </div>
+  </form>
+  <script src="options.js"></script>
+</body>
+</html>

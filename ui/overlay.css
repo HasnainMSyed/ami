@@ -102,6 +102,12 @@
 /* L2: chat sheet */
 .ami-root .ami-scrim { position: absolute; inset: 0; background: var(--ami-scrim); animation: ami-fade 400ms ease both; }
 @keyframes ami-fade { from { opacity: 0; } }
+.ami-root .ami-scrim.blur { -webkit-backdrop-filter: blur(10px) saturate(90%); backdrop-filter: blur(10px) saturate(90%); }
+
+/* Extension host: the layer covers the viewport but only its children take clicks,
+   so the page stays usable behind an L1 toast. */
+.ami-root.ami-layer { position: fixed; inset: 0; pointer-events: none; }
+.ami-root.ami-layer > * { pointer-events: auto; }
 .ami-root .ami-sheet {
   position: relative; width: min(440px, 100%); max-height: 100%;
   border-radius: var(--ami-radius-lg); display: flex; flex-direction: column; overflow: hidden;
@@ -157,6 +163,7 @@
 .ami-root .ami-block .ami-display, .ami-root .ami-block .ami-text { color: #f4f6f7; }
 .ami-root .ami-block .ami-text { opacity: 0.82; max-width: 44ch; }
 .ami-root .ami-block .ami-sheet { text-align: left; max-height: 300px; }
+.ami-root .ami-block .ami-sheet .ami-text { color: var(--ami-muted); opacity: 1; }
 .ami-root .ami-ring { position: relative; width: 84px; height: 84px; }
 .ami-root .ami-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
 .ami-root .ami-ring circle { fill: none; stroke-width: 5; }

@@ -27,6 +27,11 @@ def _hhmm(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M")
 
 
+def minutes(value: float) -> str:
+    n = round(value)
+    return f"{n} minute" if n == 1 else f"{n} minutes"
+
+
 class RuleCompanion:
     """Context keys: level, today_min, session_min, shorts_min, budget_min, goal, overruns,
     grants_today, lock_until, lock_reason, now."""
@@ -36,12 +41,12 @@ class RuleCompanion:
         if level == 2:
             shorts = f", {ctx['shorts_min']:.0f} of them on Shorts" if ctx.get("shorts_min", 0) >= 3 else ""
             g = f" This morning you said “{goal}” comes first." if goal else ""
-            return f"You're {ctx['today_min']:.0f} minutes into video today{shorts}.{g} What's pulling you back here?"
+            return f"You're {minutes(ctx['today_min'])} into video today{shorts}.{g} What's pulling you back here?"
         if level == 3:
             over = " and you went past the time I gave you" if ctx.get("overruns") else ""
             if ctx.get("reason") == "budget":
-                return f"That's your {ctx['budget_min']:.0f} minutes for today used up{over}. Not a no forever, just not right now."
-            return f"That's {ctx['session_min']:.0f} minutes in one go{over}. Not a no forever, just not right now."
+                return f"That's your {minutes(ctx['budget_min'])} for today used up{over}. Not a no forever, just not right now."
+            return f"That's {minutes(ctx['session_min'])} in one go{over}. Not a no forever, just not right now."
         if level == 4:
             if ctx.get("lock_reason") == "quiet_hours":
                 return "It's late, and you asked me to hold the line. If something truly can't wait, tell me exactly what and how long it needs."

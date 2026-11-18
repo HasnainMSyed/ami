@@ -4,8 +4,9 @@
    Theme: .ami-root[data-theme] wins; otherwise prefers-color-scheme decides. */
 
 .ami-root {
-  --ami-font: "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  --ami-font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  /* "ami-*" faces are bundled with the extension; the preview page loads Inter from Google Fonts. */
+  --ami-font: "ami-inter", "Inter", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --ami-font-display: "ami-grotesk", "Space Grotesk", "ami-inter", "Inter", system-ui, sans-serif;
 
   --ami-glass: rgba(250, 251, 252, 0.74);
   --ami-glass-strong: rgba(250, 251, 252, 0.9);

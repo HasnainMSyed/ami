@@ -1,0 +1,43 @@
+import { test } from "node:test";
+import assert from "node:assert/strict";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { detectPage, cleanTitle } = require("../lib/page.js");
+
+const cases = [
+  ["https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=10", "(3) Never Gonna Give You Up - YouTube",
+    { site: "youtube", page_type: "watch", video_id: "dQw4w9WgXcQ", title: "Never Gonna Give You Up" }],
+  ["https://www.youtube.com/shorts/AbC123xyz_0", "Shorts - YouTube", { site: "youtube", page_type: "shorts", video_id: "AbC123xyz_0" }],
+  ["https://www.youtube.com/", "YouTube", { site: "youtube", page_type: "feed", video_id: null }],
+  ["https://www.youtube.com/@veritasium/videos", "Veritasium - YouTube", { site: "youtube", page_type: "feed" }],
+  ["https://www.youtube.com/results?search_query=entropy", "entropy - YouTube", { site: "youtube", page_type: "search" }],
+  ["https://m.youtube.com/watch?v=abc", "x", { site: "youtube", page_type: "watch", video_id: "abc" }],
+  ["https://www.bilibili.com/video/BV1GJ411x7h7/?spm_id_from=333", "热力学第二定律_哔哩哔哩_bilibili",
+    { site: "bilibili", page_type: "watch", video_id: "BV1GJ411x7h7", title: "热力学第二定律" }],
+  ["https://www.bilibili.com/", "哔哩哔哩 (゜-゜)つロ 干杯~-bilibili", { site: "bilibili", page_type: "feed" }],
+  ["https://live.bilibili.com/21452505", "直播间", { site: "bilibili", page_type: "live", video_id: "live21452505" }],
+  ["https://search.bilibili.com/all?keyword=x", "x", { site: "bilibili", page_type: "search" }],
+  ["https://www.bilibili.com/bangumi/play/ep12345", "番剧", { site: "bilibili", page_type: "watch", video_id: "ep12345" }],
+];
+
+for (const [url, title, want] of cases) {
+  test(`detectPage ${url}`, () => {
+    const got = detectPage(url, title);
+    for (const [k, v] of Object.entries(want)) assert.equal(got[k], v, `${k} for ${url}`);
+  });
+}
+
+test("other sites are ignored", () => {
+  assert.equal(detectPage("https://example.com/watch?v=1", "x"), null);
+  assert.equal(detectPage("not a url", "x"), null);
+});
+
+test("video ids are sanitized", () => {
+  assert.equal(detectPage("https://www.youtube.com/watch?v=<script>", "x").video_id, "script");
+});
+
+test("titles are trimmed and capped", () => {
+  assert.equal(cleanTitle("youtube", "  a - YouTube "), "a");
+  assert.equal(cleanTitle("youtube", "x".repeat(400)).length, 300);
+});
