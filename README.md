@@ -4,8 +4,10 @@ A desktop companion that stops doomscrolling on YouTube and Bilibili. It escalat
 
 - `daemon/`: the brain (Python). Sensors → event bus → rules → companion → actions → interfaces.
 - `ui/`: design tokens, overlay components and an interactive preview of every state.
+- `docs/USER_GUIDE.md`: **start here.** What ami does, what it stores, what leaves your machine, and how to manage it.
 - `docs/architecture.html`: architecture and the upgrade path toward a general desktop agent.
-- `extension/` (coming next): Firefox + Chrome extension that reports what you watch and draws the overlay.
+- `extension/`: Firefox + Chrome extension that reports what you watch and draws the overlay.
+- `scripts/`: build the extension, install the service, install the browser policies.
 
 ## Run the daemon
 
