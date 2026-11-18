@@ -1,0 +1,27 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.token
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# local data
+*.db
+*.db-wal
+*.db-shm
+
+# extension builds and signing material
+extension/dist/
+*.crx
+*.pem
+*.xpi
+.web-extension-id
+web-ext-artifacts/
+
+# voices (large binaries, downloaded by scripts)
+voices/

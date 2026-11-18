@@ -1,0 +1,174 @@
+/* ami overlay components. Depends on tokens.css. Every rule is scoped under .ami-root. */
+
+.ami-root *, .ami-root *::before, .ami-root *::after { box-sizing: border-box; }
+.ami-root { --orb: var(--ami-l1); }
+.ami-root[data-level="2"] { --orb: var(--ami-l2); }
+.ami-root[data-level="3"] { --orb: var(--ami-l3); }
+.ami-root[data-level="4"] { --orb: var(--ami-l4); }
+
+/* Surfaces */
+.ami-root .ami-glass {
+  background: var(--ami-glass);
+  -webkit-backdrop-filter: blur(26px) saturate(160%);
+  backdrop-filter: blur(26px) saturate(160%);
+  border: 1px solid var(--ami-glass-border);
+  box-shadow: var(--ami-shadow);
+}
+.ami-root .ami-enter { animation: ami-in var(--ami-dur) var(--ami-ease) both; }
+@keyframes ami-in { from { opacity: 0; transform: translateY(10px) scale(0.98); } }
+
+/* Companion orb */
+.ami-root .ami-orb {
+  --size: 36px;
+  position: relative; flex: none; isolation: isolate;
+  width: var(--size); height: var(--size); border-radius: 50%;
+  background:
+    radial-gradient(circle at 34% 28%, rgba(255, 255, 255, 0.92) 0 7%, rgba(255, 255, 255, 0) 34%),
+    radial-gradient(circle at 50% 62%, var(--orb) 0%, color-mix(in oklab, var(--orb) 58%, #0b0d10) 100%);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22), 0 6px 18px color-mix(in oklab, var(--orb) 40%, transparent);
+  animation: ami-breathe 4.2s ease-in-out infinite;
+  transition: background 600ms var(--ami-ease);
+}
+.ami-root .ami-orb::after {
+  content: ""; position: absolute; inset: -30%; border-radius: 50%; z-index: -1;
+  background: radial-gradient(circle, color-mix(in oklab, var(--orb) 38%, transparent), transparent 68%);
+  animation: ami-halo 4.2s ease-in-out infinite;
+}
+.ami-root .ami-orb.is-thinking, .ami-root .ami-orb.is-thinking::after { animation-duration: 1.1s; }
+.ami-root .ami-orb.lg { --size: 64px; }
+@keyframes ami-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+@keyframes ami-halo { 0%, 100% { opacity: 0.45; transform: scale(0.92); } 50% { opacity: 1; transform: scale(1.08); } }
+
+/* Type */
+.ami-root .ami-title { font: 600 15px/1.3 var(--ami-font); margin: 0; letter-spacing: -0.005em; }
+.ami-root .ami-text { font: 400 13.5px/1.5 var(--ami-font); color: var(--ami-muted); margin: 0; }
+.ami-root .ami-display { font: 600 clamp(22px, 3.2vw, 30px)/1.15 var(--ami-font-display); margin: 0; letter-spacing: -0.015em; text-wrap: balance; }
+.ami-root .ami-eyebrow { font: 600 11px/1 var(--ami-font); letter-spacing: 0.08em; text-transform: uppercase; color: var(--orb); }
+
+/* Buttons and fields */
+.ami-root .ami-btn {
+  font: 600 13.5px/1 var(--ami-font); height: 36px; padding: 0 15px; border-radius: 999px;
+  border: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+  transition: transform 160ms var(--ami-ease), background 200ms, opacity 200ms;
+}
+.ami-root .ami-btn:active { transform: scale(0.97); }
+.ami-root .ami-btn:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+.ami-root .ami-btn-primary { background: var(--ami-accent); color: var(--ami-accent-fg); }
+.ami-root .ami-btn-ghost { background: var(--ami-field); color: var(--ami-fg); }
+.ami-root .ami-btn-ghost:hover { background: var(--ami-hairline); }
+.ami-root :focus-visible { outline: 2px solid var(--ami-accent); outline-offset: 2px; }
+
+.ami-root .ami-field {
+  width: 100%; border: 1px solid var(--ami-hairline); background: var(--ami-field);
+  border-radius: 12px; padding: 10px 13px; color: var(--ami-fg);
+  font: 400 14px/1.4 var(--ami-font); resize: none;
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.ami-root .ami-field::placeholder { color: var(--ami-muted); }
+.ami-root .ami-field:focus { outline: none; border-color: var(--ami-accent); box-shadow: 0 0 0 3px var(--ami-accent-soft); }
+
+.ami-root .ami-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.ami-root .ami-chip {
+  height: 32px; padding: 0 13px; border-radius: 999px; cursor: pointer;
+  border: 1px solid var(--ami-hairline); background: transparent; color: var(--ami-fg);
+  font: 500 13px/1 var(--ami-font); font-variant-numeric: tabular-nums;
+  transition: background 200ms, color 200ms, border-color 200ms;
+}
+.ami-root .ami-chip[aria-pressed="true"] { background: var(--ami-accent); color: var(--ami-accent-fg); border-color: transparent; }
+
+/* Budget meter */
+.ami-root .ami-meter { height: 6px; border-radius: 999px; background: var(--ami-field); overflow: hidden; }
+.ami-root .ami-meter > i { display: block; height: 100%; border-radius: inherit; background: var(--orb); width: var(--v, 50%); transition: width 600ms var(--ami-ease); }
+.ami-root .ami-meta { display: flex; justify-content: space-between; font: 500 12px/1 var(--ami-font); color: var(--ami-muted); font-variant-numeric: tabular-nums; }
+
+/* L1: toast */
+.ami-root .ami-toast {
+  position: absolute; right: 20px; bottom: 20px; width: min(368px, calc(100% - 40px));
+  border-radius: var(--ami-radius-lg); padding: 16px;
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 12px 14px;
+}
+.ami-root .ami-toast .ami-body { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.ami-root .ami-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* Centered card (goals) */
+.ami-root .ami-center { position: absolute; inset: 0; display: grid; place-items: center; padding: 20px; }
+.ami-root .ami-card {
+  width: min(430px, 100%); border-radius: var(--ami-radius-lg); padding: 22px;
+  display: flex; flex-direction: column; gap: 16px;
+}
+.ami-root .ami-card header { display: flex; align-items: center; gap: 12px; }
+.ami-root .ami-label { display: flex; flex-direction: column; gap: 7px; font: 500 13px/1.3 var(--ami-font); }
+
+/* L2: chat sheet */
+.ami-root .ami-scrim { position: absolute; inset: 0; background: var(--ami-scrim); animation: ami-fade 400ms ease both; }
+@keyframes ami-fade { from { opacity: 0; } }
+.ami-root .ami-sheet {
+  position: relative; width: min(440px, 100%); max-height: 100%;
+  border-radius: var(--ami-radius-lg); display: flex; flex-direction: column; overflow: hidden;
+}
+.ami-root .ami-head { display: flex; align-items: center; gap: 12px; padding: 16px 18px 14px; }
+.ami-root .ami-head .ami-text { font-size: 12.5px; }
+.ami-root .ami-stats { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 18px 14px; border-bottom: 1px solid var(--ami-hairline); }
+.ami-root .ami-stat {
+  font: 500 12px/1 var(--ami-font); color: var(--ami-muted); font-variant-numeric: tabular-nums;
+  padding: 6px 9px; border-radius: 8px; background: var(--ami-field);
+}
+.ami-root .ami-stat b { color: var(--ami-fg); font-weight: 600; }
+.ami-root .ami-thread {
+  flex: 1; min-height: 120px; overflow-y: auto; padding: 16px 18px;
+  display: flex; flex-direction: column; gap: 8px; scroll-behavior: smooth;
+}
+.ami-root .ami-msg {
+  max-width: 86%; padding: 10px 13px; border-radius: 16px;
+  font: 400 14px/1.45 var(--ami-font); animation: ami-in 240ms var(--ami-ease) both;
+}
+.ami-root .ami-msg.from-ami { background: var(--ami-bubble-ami); border-bottom-left-radius: 6px; align-self: flex-start; }
+.ami-root .ami-msg.from-me { background: var(--ami-accent); color: var(--ami-accent-fg); border-bottom-right-radius: 6px; align-self: flex-end; }
+.ami-root .ami-grant {
+  align-self: flex-start; font: 600 12px/1 var(--ami-font); color: var(--ami-accent);
+  background: var(--ami-accent-soft); padding: 7px 10px; border-radius: 999px; font-variant-numeric: tabular-nums;
+  animation: ami-in 240ms var(--ami-ease) both;
+}
+.ami-root .ami-typing { display: inline-flex; gap: 4px; padding: 13px 14px; }
+.ami-root .ami-typing i { width: 6px; height: 6px; border-radius: 50%; background: var(--ami-muted); animation: ami-dot 1s infinite ease-in-out; }
+.ami-root .ami-typing i:nth-child(2) { animation-delay: 0.15s; }
+.ami-root .ami-typing i:nth-child(3) { animation-delay: 0.3s; }
+@keyframes ami-dot { 0%, 80%, 100% { opacity: 0.3; transform: translateY(0); } 40% { opacity: 1; transform: translateY(-3px); } }
+.ami-root .ami-compose { display: flex; gap: 8px; padding: 12px; border-top: 1px solid var(--ami-hairline); }
+.ami-root .ami-compose .ami-field { border-radius: 999px; padding: 9px 15px; }
+.ami-root .ami-send {
+  flex: none; width: 38px; height: 38px; border-radius: 50%; border: 0; cursor: pointer;
+  background: var(--ami-accent); color: var(--ami-accent-fg); display: grid; place-items: center;
+  transition: transform 160ms var(--ami-ease);
+}
+.ami-root .ami-send:active { transform: scale(0.94); }
+.ami-root .ami-send svg { width: 16px; height: 16px; }
+
+/* L3 / L4: full blocker */
+.ami-root .ami-block {
+  position: absolute; inset: 0; overflow-y: auto;
+  background: var(--ami-scrim);
+  -webkit-backdrop-filter: blur(22px) saturate(120%);
+  backdrop-filter: blur(22px) saturate(120%);
+  display: flex; justify-content: center; padding: 28px 20px;
+  animation: ami-fade 500ms ease both;
+}
+.ami-root .ami-block-inner { width: min(500px, 100%); margin: auto; display: flex; flex-direction: column; align-items: center; gap: 16px; text-align: center; }
+.ami-root .ami-block .ami-display, .ami-root .ami-block .ami-text { color: #f4f6f7; }
+.ami-root .ami-block .ami-text { opacity: 0.82; max-width: 44ch; }
+.ami-root .ami-block .ami-sheet { text-align: left; max-height: 300px; }
+.ami-root .ami-ring { position: relative; width: 84px; height: 84px; }
+.ami-root .ami-ring svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.ami-root .ami-ring circle { fill: none; stroke-width: 5; }
+.ami-root .ami-ring .track { stroke: rgba(255, 255, 255, 0.16); }
+.ami-root .ami-ring .prog { stroke: var(--orb); stroke-linecap: round; transition: stroke-dashoffset 1s linear; }
+.ami-root .ami-ring span {
+  position: absolute; inset: 0; display: grid; place-items: center;
+  font: 600 17px/1 var(--ami-font); color: #f4f6f7; font-variant-numeric: tabular-nums;
+}
+.ami-root .ami-lock { display: inline-flex; align-items: center; gap: 8px; font: 600 13px/1 var(--ami-font); color: #f4f6f7; padding: 9px 14px; border-radius: 999px; background: rgba(255, 255, 255, 0.12); font-variant-numeric: tabular-nums; }
+.ami-root .ami-lock svg { width: 14px; height: 14px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ami-root *, .ami-root *::before, .ami-root *::after { animation: none !important; transition: none !important; }
+}

@@ -1,0 +1,340 @@
+<title>ami Architecture</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: single reading column (~72ch) with full-width figures; sections run top-down from runtime → extension map → Jarvis → roadmap. */
+:root {
+  --bg: #f6f7f8;
+  --surface: #ffffff;
+  --fg: #16191d;
+  --muted: #5d6670;
+  --line: #d5dade;
+  --accent: #0b7a6b;
+  --accent-tint: #e2f3ef;
+  --future: #8a939c;
+  --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+  --font-body: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111416; --surface: #1a1e21; --fg: #e7eaec; --muted: #9aa3ab;
+    --line: #2f363b; --accent: #4cc9b0; --accent-tint: #15302b; --future: #6f7880;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111416; --surface: #1a1e21; --fg: #e7eaec; --muted: #9aa3ab;
+  --line: #2f363b; --accent: #4cc9b0; --accent-tint: #15302b; --future: #6f7880;
+  color-scheme: dark;
+}
+body {
+  background: var(--bg); color: var(--fg);
+  font: 15px/1.6 var(--font-body);
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 40px 64px;
+}
+main { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 56px; }
+header { display: flex; flex-direction: column; gap: 10px; max-width: 72ch; }
+.eyebrow { font: 500 12px/1 var(--font-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--accent); }
+h1 { font: 600 clamp(28px, 4vw, 40px)/1.1 var(--font-display); margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+h2 { font: 600 22px/1.2 var(--font-display); margin: 0; text-wrap: balance; }
+h3 { font: 600 15px/1.3 var(--font-body); margin: 0; }
+p { margin: 0; max-width: 72ch; }
+.lede { color: var(--muted); font-size: 16px; }
+section { display: flex; flex-direction: column; gap: 16px; }
+code { font: 13px var(--font-mono); background: var(--surface); border: 1px solid var(--line); border-radius: 5px; padding: 1px 5px; }
+
+figure { margin: 0; display: flex; flex-direction: column; gap: 10px; }
+.canvas { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; overflow-x: auto; }
+.canvas svg { display: block; width: 100%; min-width: 760px; height: auto; color: var(--fg); }
+figcaption { color: var(--muted); font-size: 14px; max-width: 80ch; }
+
+/* SVG classes (page CSS styles the inline SVG) */
+.box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.box-core { fill: var(--accent-tint); stroke: var(--accent); stroke-width: 1.5; }
+.box-future { fill: none; stroke: var(--future); stroke-width: 1.5; stroke-dasharray: 6 5; }
+.group { fill: none; stroke: var(--line); stroke-width: 1.2; stroke-dasharray: 2 4; }
+.t { fill: currentColor; font: 600 13px var(--font-body); }
+.s { fill: var(--muted); font: 400 11.5px var(--font-body); }
+.g { fill: var(--muted); font: 500 11px var(--font-mono); letter-spacing: .04em; text-transform: uppercase; }
+.lbl { fill: var(--muted); font: 500 11px var(--font-mono); }
+.lbl-accent { fill: var(--accent); font: 500 11px var(--font-mono); }
+.tf { fill: var(--future); font: 600 13px var(--font-body); }
+.edge { fill: none; stroke: currentColor; stroke-width: 1.4; }
+.edge-accent { fill: none; stroke: var(--accent); stroke-width: 1.8; }
+.edge-future { fill: none; stroke: var(--future); stroke-width: 1.4; stroke-dasharray: 5 4; }
+.head { fill: currentColor; }
+.head-accent { fill: var(--accent); }
+.head-future { fill: var(--future); }
+
+.legend { display: flex; flex-wrap: wrap; gap: 18px; font-size: 13px; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 8px; }
+.sw { width: 22px; height: 12px; border-radius: 3px; display: inline-block; }
+.sw-core { background: var(--accent-tint); border: 1.5px solid var(--accent); }
+.sw-now { background: var(--surface); border: 1.5px solid var(--line); }
+.sw-future { border: 1.5px dashed var(--future); }
+
+/* Extension map */
+.map { display: grid; grid-template-columns: 1fr; border: 1px solid var(--line); border-radius: 14px; overflow: hidden; background: var(--surface); }
+.row { display: grid; grid-template-columns: 150px minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1.2fr); gap: 16px; padding: 16px 18px; border-top: 1px solid var(--line); align-items: start; }
+.row:first-child { border-top: 0; }
+.row.head-row { background: var(--bg); font: 500 11px var(--font-mono); text-transform: uppercase; letter-spacing: .06em; color: var(--muted); padding-block: 10px; }
+.layer { font: 600 15px var(--font-display); }
+.layer small { display: block; font: 400 12px var(--font-mono); color: var(--muted); margin-top: 2px; }
+.contract { font-size: 13.5px; color: var(--muted); min-width: 0; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; min-width: 0; }
+.chip { font: 500 12px var(--font-mono); padding: 3px 8px; border-radius: 999px; border: 1.5px solid var(--line); white-space: nowrap; }
+.chip.now { border-color: var(--accent); color: var(--accent); background: var(--accent-tint); }
+.chip.next { border-style: dashed; border-color: var(--future); color: var(--muted); }
+.chip.x11::after { content: " · Xorg"; color: var(--future); }
+
+.cols { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.note p { color: var(--muted); }
+ol.path { margin: 0; padding-left: 22px; display: flex; flex-direction: column; gap: 10px; max-width: 80ch; }
+ol.path li::marker { font: 600 14px var(--font-mono); color: var(--accent); }
+ol.path b { font-weight: 600; }
+ol.path span { color: var(--muted); }
+
+@media (max-width: 720px) {
+  .row { grid-template-columns: 1fr; gap: 8px; }
+  .row.head-row { display: none; }
+}
+</style>
+
+<main>
+  <header>
+    <div class="eyebrow">~/projects/ami · reference</div>
+    <h1>ami Architecture</h1>
+    <p class="lede">An anti-doomscroll companion built in layers, so it can grow into a general desktop agent by adding pieces instead of rewriting them. Rules decide <em>when</em> to step in; the companion decides <em>what to say</em> and whether you get more time.</p>
+  </header>
+
+  <section>
+    <h2>Phase 1 runtime: one heartbeat's journey</h2>
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1000 430" role="img" aria-label="A browser extension sends a heartbeat every 15 seconds to the local ami daemon. The tracker classifies the video with local Ollama and emits events onto the bus; the escalation rule turns them into intents; the companion decides using goals and memory, optionally asking a cloud LLM; actions answer the extension with the overlay to show, and trigger desktop notifications or voice. Mark LVII connects in Phase 2 through an event stream and plugin calls.">
+          <defs>
+            <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="head"/></marker>
+            <marker id="aa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="head-accent"/></marker>
+            <marker id="af" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="head-future"/></marker>
+          </defs>
+
+          <rect class="group" x="20" y="95" width="180" height="235" rx="12"/>
+          <text class="g" x="28" y="86">Browser extension</text>
+          <rect class="group" x="250" y="95" width="560" height="235" rx="12"/>
+          <text class="g" x="258" y="86">ami daemon · 127.0.0.1</text>
+
+          <rect class="box" x="270" y="16" width="140" height="46" rx="9"/>
+          <text class="t" x="340" y="36" text-anchor="middle">Ollama gemma4</text>
+          <text class="s" x="340" y="52" text-anchor="middle">local · private</text>
+
+          <rect class="box" x="35" y="120" width="150" height="50" rx="9"/>
+          <text class="t" x="110" y="141" text-anchor="middle">content.js</text>
+          <text class="s" x="110" y="158" text-anchor="middle">sensor · YT / Bilibili</text>
+          <rect class="box" x="35" y="260" width="150" height="50" rx="9"/>
+          <text class="t" x="110" y="281" text-anchor="middle">overlay.js</text>
+          <text class="s" x="110" y="298" text-anchor="middle">pause · chat · block</text>
+
+          <rect class="box" x="270" y="120" width="140" height="50" rx="9"/>
+          <text class="t" x="340" y="141" text-anchor="middle">tracker</text>
+          <text class="s" x="340" y="158" text-anchor="middle">sessions · weights</text>
+          <rect class="box" x="460" y="120" width="140" height="50" rx="9"/>
+          <text class="t" x="530" y="141" text-anchor="middle">event bus</text>
+          <text class="s" x="530" y="158" text-anchor="middle">+ timeline (SQLite)</text>
+          <rect class="box" x="650" y="120" width="140" height="50" rx="9"/>
+          <text class="t" x="720" y="141" text-anchor="middle">rules/doomscroll</text>
+          <text class="s" x="720" y="158" text-anchor="middle">escalation L0–L4</text>
+
+          <rect class="box" x="270" y="260" width="140" height="50" rx="9"/>
+          <text class="t" x="340" y="281" text-anchor="middle">actions</text>
+          <text class="s" x="340" y="298" text-anchor="middle">typed tool registry</text>
+          <rect class="box-core" x="460" y="260" width="140" height="50" rx="9"/>
+          <text class="t" x="530" y="281" text-anchor="middle">brain/companion</text>
+          <text class="s" x="530" y="298" text-anchor="middle">persona · LLM router</text>
+          <rect class="box" x="650" y="260" width="140" height="50" rx="9"/>
+          <text class="t" x="720" y="281" text-anchor="middle">memory</text>
+          <text class="s" x="720" y="298" text-anchor="middle">goals · notes · grants</text>
+
+          <rect class="box" x="270" y="370" width="140" height="46" rx="9"/>
+          <text class="t" x="340" y="390" text-anchor="middle">notify-send · Piper</text>
+          <text class="s" x="340" y="406" text-anchor="middle">GNOME desktop</text>
+          <rect class="box" x="460" y="370" width="140" height="46" rx="9"/>
+          <text class="t" x="530" y="390" text-anchor="middle">Cloud LLM</text>
+          <text class="s" x="530" y="406" text-anchor="middle">OpenAI-compatible</text>
+
+          <rect class="box-future" x="852" y="185" width="130" height="70" rx="9"/>
+          <text class="tf" x="917" y="214" text-anchor="middle">Mark LVII</text>
+          <text class="s" x="917" y="232" text-anchor="middle">voice shell · Phase 2</text>
+
+          <path class="edge-accent" d="M185 145H268" marker-end="url(#aa)"/>
+          <text class="lbl-accent" x="227" y="134" text-anchor="middle">heartbeat</text>
+          <text class="lbl" x="227" y="186" text-anchor="middle">every 15 s</text>
+
+          <path class="edge" d="M340 118V64" marker-start="url(#a)" marker-end="url(#a)"/>
+          <text class="lbl" x="348" y="95">title → class</text>
+
+          <path class="edge-accent" d="M410 145H458" marker-end="url(#aa)"/>
+          <text class="lbl" x="434" y="136" text-anchor="middle">Event</text>
+          <path class="edge-accent" d="M600 145H648" marker-end="url(#aa)"/>
+          <text class="lbl" x="624" y="136" text-anchor="middle">Event</text>
+
+          <path class="edge-accent" d="M720 170V215H530V258" marker-end="url(#aa)"/>
+          <text class="lbl-accent" x="625" y="208" text-anchor="middle">Intent (L2+)</text>
+
+          <path class="edge" d="M602 285H648" marker-start="url(#a)" marker-end="url(#a)"/>
+          <text class="lbl" x="625" y="276" text-anchor="middle">r/w</text>
+
+          <path class="edge-accent" d="M460 285H412" marker-end="url(#aa)"/>
+          <text class="lbl-accent" x="436" y="276" text-anchor="middle">tool</text>
+
+          <path class="edge-accent" d="M270 285H187" marker-end="url(#aa)"/>
+          <text class="lbl-accent" x="228" y="276" text-anchor="middle">{level, ui}</text>
+          <text class="lbl" x="228" y="304" text-anchor="middle">in reply</text>
+
+          <path class="edge" d="M340 310V368" marker-end="url(#a)"/>
+          <text class="lbl" x="348" y="345">L1 notify · L3 voice</text>
+
+          <path class="edge" d="M530 312V368" marker-start="url(#a)" marker-end="url(#a)"/>
+          <text class="lbl" x="538" y="345">chat turns · summaries only</text>
+
+          <path class="edge-future" d="M810 210H850" marker-end="url(#af)"/>
+          <path class="edge-future" d="M850 232H812" marker-end="url(#af)"/>
+          <text class="lbl" x="830" y="200" text-anchor="middle">SSE</text>
+          <text class="lbl" x="830" y="250" text-anchor="middle">API</text>
+        </svg>
+      </div>
+      <figcaption>The accented path is the critical loop: the extension reports what you're watching, rules escalate, the companion decides, and the decision comes back in the heartbeat reply as the overlay to draw. L1 nudges skip the LLM entirely. Video titles are classified locally; only chat turns with short usage summaries go to the cloud model.</figcaption>
+      <div class="legend">
+        <span><i class="sw sw-core"></i>The companion, the center of the design</span>
+        <span><i class="sw sw-now"></i>Built in Phase 1</span>
+        <span><i class="sw sw-future"></i>Later phases</span>
+      </div>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Where a general desktop agent plugs in</h2>
+    <p>Every layer has one small contract. Adding a capability means writing one module against that contract and registering it; nothing upstream or downstream changes.</p>
+    <div class="map" role="table" aria-label="Layers, their contracts, Phase 1 modules and future modules">
+      <div class="row head-row" role="row"><span>Layer</span><span>Contract</span><span>Phase 1</span><span>Later</span></div>
+      <div class="row" role="row">
+        <div class="layer">Sensors<small>sensors/</small></div>
+        <div class="contract">Observe something and publish <code>Event(kind, payload, ts)</code> on the bus. Never decide anything.</div>
+        <div class="chips"><span class="chip now">browser (extension)</span><span class="chip now">heartbeat-gap</span></div>
+        <div class="chips"><span class="chip next">gnome-focus (Shell ext.)</span><span class="chip next">idle</span><span class="chip next">calendar</span><span class="chip next">files</span><span class="chip next x11">screen</span></div>
+      </div>
+      <div class="row" role="row">
+        <div class="layer">Event bus<small>bus.py</small></div>
+        <div class="contract">Async pub/sub inside the daemon. Every event is also appended to the SQLite timeline, the agent's long-term record of what happened.</div>
+        <div class="chips"><span class="chip now">in-process bus</span><span class="chip now">timeline</span></div>
+        <div class="chips"><span class="chip next">timeline search</span></div>
+      </div>
+      <div class="row" role="row">
+        <div class="layer">Rules<small>rules/</small></div>
+        <div class="contract">Pure functions: <code>(events, state, clock) → Intent?</code>. Deterministic, unit-tested, no LLM calls.</div>
+        <div class="chips"><span class="chip now">doomscroll</span><span class="chip now">quiet-hours</span></div>
+        <div class="chips"><span class="chip next">focus blocks</span><span class="chip next">meeting prep</span><span class="chip next">bedtime</span></div>
+      </div>
+      <div class="row" role="row">
+        <div class="layer">Brain<small>brain/</small></div>
+        <div class="contract">Turn an <code>Intent</code> plus context (goals, memory, usage) into a decision and tool calls. The LLM router picks local or cloud per task.</div>
+        <div class="chips"><span class="chip now">companion</span><span class="chip now">llm router</span><span class="chip now">memory</span></div>
+        <div class="chips"><span class="chip next">planner</span><span class="chip next">daily review</span></div>
+      </div>
+      <div class="row" role="row">
+        <div class="layer">Actions<small>actions/</small></div>
+        <div class="contract">Typed tools with a JSON schema: <code>run(args) → Outcome</code>. Outcomes report what was observed, not what was attempted.</div>
+        <div class="chips"><span class="chip now">pause_video</span><span class="chip now">show_overlay</span><span class="chip now">block</span><span class="chip now">notify</span><span class="chip now">speak</span></div>
+        <div class="chips"><span class="chip next">open_app</span><span class="chip next">calendar</span><span class="chip next x11">click/type</span></div>
+      </div>
+      <div class="row" role="row">
+        <div class="layer">Interfaces<small>interfaces/</small></div>
+        <div class="contract">Ways in and out of the daemon. Each interface only calls the bus, the brain or actions; it never holds logic of its own.</div>
+        <div class="chips"><span class="chip now">HTTP (extension)</span><span class="chip now">SSE /events</span></div>
+        <div class="chips"><span class="chip next">Mark LVII plugin</span><span class="chip next">MCP server</span><span class="chip next">Telegram</span></div>
+      </div>
+    </div>
+    <p class="lede" style="font-size:14px">Chips marked <span class="chip next x11" style="font-size:11px">screen</span> need the “Ubuntu on Xorg” session; GNOME Wayland blocks screen capture and synthetic input.</p>
+  </section>
+
+  <section>
+    <h2>Phase 2: Mark LVII as the voice shell</h2>
+    <figure>
+      <div class="canvas">
+        <svg viewBox="0 0 1000 250" role="img" aria-label="Mark LVII pulls data from ami through a plugin that calls ami's HTTP API when you ask, and ami pushes escalations to Mark LVII through a server-sent event stream that a small bridge turns into speech. ami's rules and companion stay in the daemon.">
+          <defs>
+            <marker id="b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="head"/></marker>
+            <marker id="ba" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0L10 5L0 10z" class="head-accent"/></marker>
+          </defs>
+          <rect class="group" x="20" y="40" width="430" height="190" rx="12"/>
+          <text class="g" x="28" y="31">Mark LVII (Jarvis process)</text>
+          <rect class="group" x="570" y="40" width="410" height="190" rx="12"/>
+          <text class="g" x="578" y="31">ami daemon</text>
+
+          <rect class="box" x="40" y="70" width="170" height="50" rx="9"/>
+          <text class="t" x="125" y="91" text-anchor="middle">voice session</text>
+          <text class="s" x="125" y="108" text-anchor="middle">Gemini Live or local</text>
+          <rect class="box-core" x="260" y="70" width="170" height="50" rx="9"/>
+          <text class="t" x="345" y="91" text-anchor="middle">plugins/ami.py</text>
+          <text class="s" x="345" y="108" text-anchor="middle">ami-owned · drop-in</text>
+          <rect class="box" x="40" y="160" width="170" height="50" rx="9"/>
+          <text class="t" x="125" y="181" text-anchor="middle">main.py speak()</text>
+          <text class="s" x="125" y="198" text-anchor="middle">existing method</text>
+          <rect class="box-core" x="260" y="160" width="170" height="50" rx="9"/>
+          <text class="t" x="345" y="181" text-anchor="middle">ami_bridge.py</text>
+          <text class="s" x="345" y="198" text-anchor="middle">ami-owned · small patch</text>
+
+          <rect class="box" x="590" y="70" width="170" height="50" rx="9"/>
+          <text class="t" x="675" y="91" text-anchor="middle">HTTP API</text>
+          <text class="s" x="675" y="108" text-anchor="middle">status · history · goals · grant</text>
+          <rect class="box" x="590" y="160" width="170" height="50" rx="9"/>
+          <text class="t" x="675" y="181" text-anchor="middle">GET /events</text>
+          <text class="s" x="675" y="198" text-anchor="middle">server-sent events</text>
+          <rect class="box" x="810" y="115" width="150" height="50" rx="9"/>
+          <text class="t" x="885" y="136" text-anchor="middle">rules + companion</text>
+          <text class="s" x="885" y="153" text-anchor="middle">still decide</text>
+
+          <path class="edge" d="M210 95H258" marker-end="url(#b)"/>
+          <text class="lbl" x="234" y="86" text-anchor="middle">tool</text>
+          <path class="edge-accent" d="M430 95H588" marker-end="url(#ba)"/>
+          <text class="lbl-accent" x="509" y="86" text-anchor="middle">pull · when you ask</text>
+          <path class="edge-accent" d="M590 185H432" marker-end="url(#ba)"/>
+          <text class="lbl-accent" x="511" y="176" text-anchor="middle">push · escalation L2+</text>
+          <path class="edge" d="M260 185H212" marker-end="url(#b)"/>
+          <text class="lbl" x="236" y="176" text-anchor="middle">text</text>
+          <path class="edge" d="M125 160V122" marker-end="url(#b)"/>
+          <text class="lbl" x="133" y="145">spoken</text>
+          <path class="edge" d="M808 132L762 104" marker-end="url(#b)"/>
+          <path class="edge" d="M808 150L762 176" marker-end="url(#b)"/>
+          <text class="lbl" x="790" y="105" text-anchor="middle">grants</text>
+          <text class="lbl" x="790" y="188" text-anchor="middle">emits</text>
+        </svg>
+      </div>
+      <figcaption>Jarvis is a face, not a judge: it can ask for time, but ami's companion decides. If Jarvis is closed, nothing breaks, because ami falls back to its own overlay and voice. The two accented files are the only ami code inside Mark LVII, kept in <code>integrations/mark-lvii/</code> so they can be re-applied after updates.</figcaption>
+    </figure>
+  </section>
+
+  <section>
+    <h2>Decisions to keep</h2>
+    <div class="cols">
+      <div class="note"><h3>Enforcement never depends on a shell</h3><p>The extension is force-installed through browser policies and fails closed after the daily budget if the daemon is down. Jarvis, Hermes or anything else is optional on top.</p></div>
+      <div class="note"><h3>Rules decide when, the LLM decides what</h3><p>Triggers are deterministic and testable. The model is called a few times a day, only at intervention points.</p></div>
+      <div class="note"><h3>Local first, cloud for conversation</h3><p>Titles and classification stay on Ollama. Cloud chat receives short usage summaries, not raw browsing history.</p></div>
+      <div class="note"><h3>Wayland stays</h3><p>Browser sensing works without screen access. Xorg is a deliberate later switch only for screen control.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Upgrade path</h2>
+    <ol class="path">
+      <li><b>Mark LVII shell.</b> <span>Plugin and speak bridge; voice questions about your usage and spoken escalations.</span></li>
+      <li><b>Desktop-wide focus sensor.</b> <span>A tiny GNOME Shell extension reports the focused app over D-Bus, which works on Wayland. Rules can then cover apps, not just sites.</span></li>
+      <li><b>More rules.</b> <span>Focus blocks tied to your daily goals, bedtime wind-down, meeting prep from the calendar.</span></li>
+      <li><b>More reach.</b> <span>An MCP server interface lets Hermes, Claude or other agents read the timeline and call actions; Telegram for check-ins away from the desk.</span></li>
+      <li><b>Screen control.</b> <span>Only on the Xorg session: screen reading and click/type actions, gated behind confirmation.</span></li>
+    </ol>
+  </section>
+</main>

@@ -1,0 +1,294 @@
+<title>ami Interface</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Space+Grotesk:wght@500;600&display=swap">
+<link rel="stylesheet" href="tokens.css">
+<link rel="stylesheet" href="overlay.css">
+<style>
+/* Layout: one column; a control strip above a large mock browser stage, orb reference row beneath. */
+:root {
+  --bg: #eef0f2; --fg: #15191c; --muted: #5d666e; --line: #d4d9dd; --panel: #ffffff; --accent: #0b7a6b;
+  --font: "Inter", system-ui, sans-serif; --font-display: "Space Grotesk", "Inter", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --bg: #0f1214; --fg: #e8ebed; --muted: #98a1a9; --line: #2b3236; --panel: #181c1f; --accent: #4cc9b0; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --bg: #0f1214; --fg: #e8ebed; --muted: #98a1a9; --line: #2b3236; --panel: #181c1f; --accent: #4cc9b0; color-scheme: dark; }
+body {
+  background: var(--bg); color: var(--fg); font: 15px/1.55 var(--font);
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 32px 56px;
+}
+.wrap { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 20px; }
+.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 16px; }
+.top h1 { font: 600 30px/1.1 var(--font-display); margin: 0 0 6px; letter-spacing: -0.015em; }
+.top p { margin: 0; color: var(--muted); max-width: 60ch; }
+.seg { display: flex; flex-wrap: wrap; gap: 4px; padding: 4px; border-radius: 999px; background: var(--panel); border: 1px solid var(--line); }
+.seg button {
+  font: 500 13px/1 var(--font); color: var(--muted); background: transparent; border: 0; cursor: pointer;
+  height: 32px; padding: 0 13px; border-radius: 999px; display: inline-flex; align-items: center; gap: 7px;
+  transition: background 200ms, color 200ms;
+}
+.seg button i { width: 8px; height: 8px; border-radius: 50%; }
+.seg button[aria-selected="true"] { background: var(--fg); color: var(--bg); }
+.seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Mock video site (deliberately unbranded) */
+.stage {
+  position: relative; overflow: hidden; border-radius: 18px; border: 1px solid var(--line);
+  height: clamp(600px, 62vw, 700px); background: #0e0f11; color: #e9eaec;
+}
+.mock { position: absolute; inset: 0; display: grid; grid-template-rows: 52px 1fr; transition: filter 500ms ease; }
+.stage[data-dim="soft"] .mock { filter: brightness(0.75) saturate(0.8); }
+.stage[data-dim="hard"] .mock { filter: blur(8px) brightness(0.6); }
+.bar { display: flex; align-items: center; gap: 14px; padding: 0 18px; border-bottom: 1px solid #1d1f22; }
+.bar .logo { width: 26px; height: 18px; border-radius: 5px; background: #3a3d42; }
+.bar .search { flex: 1; max-width: 460px; height: 32px; border-radius: 999px; background: #1a1c1f; border: 1px solid #26292d; }
+.content { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 20px; padding: 20px; min-height: 0; }
+.player {
+  aspect-ratio: 16 / 9; border-radius: 14px; position: relative; overflow: hidden;
+  background: radial-gradient(120% 90% at 20% 20%, #ff8a5b 0%, transparent 55%), radial-gradient(90% 90% at 85% 70%, #6b5cff 0%, transparent 55%), linear-gradient(135deg, #2b1d3a, #13202b);
+}
+.player .scrub { position: absolute; left: 16px; right: 16px; bottom: 14px; height: 4px; border-radius: 4px; background: rgba(255,255,255,.25); }
+.player .scrub i { display: block; width: 63%; height: 100%; border-radius: inherit; background: #fff; }
+.vt { margin-top: 12px; font: 600 16px/1.3 var(--font); color: #f1f2f3; }
+.vm { font-size: 13px; color: #9a9da2; margin-top: 4px; }
+.side { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.rec { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 10px; }
+.rec .th { aspect-ratio: 16 / 9; border-radius: 8px; background: linear-gradient(135deg, #2a2d33, #1b1d21); }
+.rec .ln { height: 10px; border-radius: 5px; background: #24272b; margin-top: 4px; }
+.rec .ln.s { width: 60%; background: #1d2023; margin-top: 8px; }
+.layer { position: absolute; inset: 0; }
+
+.orbs { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
+.orbcell { background: var(--panel); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: flex; align-items: center; gap: 14px; }
+.orbcell b { display: block; font: 600 14px/1.2 var(--font); }
+.orbcell span { font-size: 12.5px; color: var(--muted); }
+.note { color: var(--muted); font-size: 13.5px; max-width: 80ch; }
+
+@media (max-width: 760px) {
+  .content { grid-template-columns: 1fr; }
+  .side { display: none; }
+}
+</style>
+
+<div class="wrap">
+  <div class="top">
+    <div>
+      <h1>ami Interface</h1>
+      <p>Every state the companion can show on top of YouTube or Bilibili. Pick a state; in Check-in, Step away and Locked you can type to it.</p>
+    </div>
+    <div class="seg" role="tablist" aria-label="Companion state" id="seg">
+      <button role="tab" id="t-goals" data-s="goals" aria-selected="false"><i style="background:var(--accent)"></i>Morning goals</button>
+      <button role="tab" id="t-nudge" data-s="nudge" aria-selected="true"><i style="background:#14a38b"></i>L1 Nudge</button>
+      <button role="tab" id="t-checkin" data-s="checkin" aria-selected="false"><i style="background:#e29a2d"></i>L2 Check-in</button>
+      <button role="tab" id="t-away" data-s="away" aria-selected="false"><i style="background:#e5653f"></i>L3 Step away</button>
+      <button role="tab" id="t-locked" data-s="locked" aria-selected="false"><i style="background:#c93c62"></i>L4 Locked</button>
+    </div>
+  </div>
+
+  <div class="stage" id="stage" data-dim="none">
+    <div class="mock" aria-hidden="true">
+      <div class="bar"><span class="logo"></span><span class="search"></span></div>
+      <div class="content">
+        <div>
+          <div class="player"><div class="scrub"><i></i></div></div>
+          <div class="vt">Funniest fails of the week, compilation #212</div>
+          <div class="vm">2.1M views · 3 days ago</div>
+        </div>
+        <div class="side">
+          <div class="rec"><span class="th"></span><span><span class="ln" style="display:block"></span><span class="ln s" style="display:block"></span></span></div>
+          <div class="rec"><span class="th"></span><span><span class="ln" style="display:block"></span><span class="ln s" style="display:block"></span></span></div>
+          <div class="rec"><span class="th"></span><span><span class="ln" style="display:block"></span><span class="ln s" style="display:block"></span></span></div>
+          <div class="rec"><span class="th"></span><span><span class="ln" style="display:block"></span><span class="ln s" style="display:block"></span></span></div>
+        </div>
+      </div>
+    </div>
+    <div class="layer ami-root" id="layer" data-level="1"></div>
+  </div>
+
+  <div class="orbs">
+    <div class="orbcell ami-root" data-level="1"><span class="ami-orb"></span><div><b>L1 · teal</b><span>calm, breathing</span></div></div>
+    <div class="orbcell ami-root" data-level="2"><span class="ami-orb"></span><div><b>L2 · amber</b><span>attention</span></div></div>
+    <div class="orbcell ami-root" data-level="3"><span class="ami-orb"></span><div><b>L3 · coral</b><span>step away</span></div></div>
+    <div class="orbcell ami-root" data-level="4"><span class="ami-orb"></span><div><b>L4 · rose</b><span>locked</span></div></div>
+    <div class="orbcell ami-root" data-level="1"><span class="ami-orb is-thinking"></span><div><b>Thinking</b><span>faster pulse</span></div></div>
+  </div>
+  <p class="note">The chat here uses canned replies to show the flow; the real companion reads your goals, today's usage and its memory of past sessions. Colors, glass and motion follow your system theme and reduced-motion setting.</p>
+</div>
+
+<script>
+(() => {
+  const layer = document.getElementById('layer');
+  const stage = document.getElementById('stage');
+  const seg = document.getElementById('seg');
+  let timer = null;
+
+  const GOAL = 'Finish the thermo problem set';
+  const sendIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 8h11M9 3.5 13.5 8 9 12.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const lockIcon = '<svg viewBox="0 0 16 16" aria-hidden="true"><rect x="3" y="7" width="10" height="7" rx="2" fill="currentColor"/><path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>';
+  const hhmm = (mins) => { const d = new Date(Date.now() + mins * 60000); return d.toTimeString().slice(0, 5); };
+
+  function chatSheet(opening, stats) {
+    return `
+      <div class="ami-sheet ami-glass ami-enter" role="dialog" aria-label="Chat with ami">
+        <div class="ami-head">
+          <span class="ami-orb" id="orb"></span>
+          <div><p class="ami-title">ami</p><p class="ami-text">${stats.sub}</p></div>
+        </div>
+        ${stats.chips ? `<div class="ami-stats">${stats.chips.map(c => `<span class="ami-stat">${c}</span>`).join('')}</div>` : ''}
+        <div class="ami-thread" id="thread" aria-live="polite"><div class="ami-msg from-ami">${opening}</div></div>
+        <form class="ami-compose" id="compose">
+          <input class="ami-field" id="msg" autocomplete="off" placeholder="Tell ami why you're here…" aria-label="Message to ami">
+          <button class="ami-send" type="submit" aria-label="Send">${sendIcon}</button>
+        </form>
+      </div>`;
+  }
+
+  const views = {
+    goals: () => ({ level: 1, dim: 'soft', html: `
+      <div class="ami-scrim"></div>
+      <div class="ami-center">
+        <form class="ami-card ami-glass ami-enter" id="goalsForm">
+          <header><span class="ami-orb"></span><div><span class="ami-eyebrow">Good morning</span><p class="ami-title">What matters today?</p></div></header>
+          <label class="ami-label" for="g1">The one thing you want done
+            <textarea class="ami-field" id="g1" rows="2">${GOAL}</textarea></label>
+          <div class="ami-label">Video time that feels reasonable
+            <div class="ami-chips" id="budget">
+              ${[30, 45, 60, 90].map(m => `<button type="button" class="ami-chip" aria-pressed="${m === 60}">${m} min</button>`).join('')}
+            </div></div>
+          <div class="ami-row" style="justify-content:flex-end">
+            <button type="button" class="ami-btn ami-btn-ghost">Skip today</button>
+            <button type="submit" class="ami-btn ami-btn-primary">Start the day</button>
+          </div>
+        </form>
+      </div>` }),
+
+    nudge: () => ({ level: 1, dim: 'none', html: `
+      <div class="ami-toast ami-glass ami-enter" role="status">
+        <span class="ami-orb"></span>
+        <div class="ami-body">
+          <div><p class="ami-title">15 minutes in</p>
+          <p class="ami-text">Mostly compilations so far. Your goal today: ${GOAL.toLowerCase()}.</p></div>
+          <div><div class="ami-meter"><i style="--v:42%"></i></div>
+          <div class="ami-meta" style="margin-top:6px"><span>25 of 60 min today</span><span>check-in at 25</span></div></div>
+          <div class="ami-row"><button class="ami-btn ami-btn-primary">Wrap up</button><button class="ami-btn ami-btn-ghost">Keep watching</button></div>
+        </div>
+      </div>` }),
+
+    checkin: () => ({ level: 2, dim: 'hard', html: `
+      <div class="ami-scrim"></div>
+      <div class="ami-center">${chatSheet(
+        `You're 52 minutes into video today, 26 of them on Shorts. This morning you said the thermo set comes first. What's pulling you back here?`,
+        { sub: 'Paused your video · 25 min this session', chips: ['Today <b>52 / 60</b> min', 'Shorts <b>26</b> min', `Goal <b>thermo set</b>`] })}
+      </div>` }),
+
+    away: () => ({ level: 3, dim: 'hard', html: `
+      <div class="ami-block" role="dialog" aria-label="Time to step away">
+        <div class="ami-block-inner ami-enter">
+          <span class="ami-orb lg"></span>
+          <span class="ami-eyebrow">40 minutes straight</span>
+          <h2 class="ami-display">Time to step away for a bit.</h2>
+          <p class="ami-text">Stand up, get water, open the problem set. If there's a real reason to stay, tell me below.</p>
+          <div class="ami-ring" aria-label="Cooldown"><svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="38"/><circle class="prog" id="prog" cx="42" cy="42" r="38"/></svg><span id="ringText">1:00</span></div>
+          ${chatSheet(`That's 40 minutes in one go, and you went 12 past the 10 I gave you at 21:30. Not a no forever, just not right now.`, { sub: 'Cooldown running' })}
+          <button class="ami-btn ami-btn-ghost" id="unlock" disabled style="background:rgba(255,255,255,.14);color:#f4f6f7">Unlock 10 min</button>
+        </div>
+      </div>` }),
+
+    locked: () => ({ level: 4, dim: 'hard', html: `
+      <div class="ami-block" role="dialog" aria-label="Locked">
+        <div class="ami-block-inner ami-enter">
+          <span class="ami-orb lg"></span>
+          <span class="ami-lock">${lockIcon}Locked until 07:00</span>
+          <h2 class="ami-display">It's late. You asked me to hold the line.</h2>
+          <p class="ami-text">Quiet hours started at 23:30. Three of your last four late sessions ended after 1 am.</p>
+          ${chatSheet(`If something truly can't wait, tell me exactly what it is and how long it needs.`, { sub: 'Exceptions need a specific reason' })}
+        </div>
+      </div>` }),
+  };
+
+  function reply(text, level) {
+    const t = text.toLowerCase();
+    if (/(lecture|study|course|tutorial|homework|class|learn|research|exam)/.test(t)) {
+      if (level >= 4) return { msg: `A lecture at this hour usually becomes three. Save it to Watch Later and I'll put it first on tomorrow's list.` };
+      const g = level >= 3 ? 5 : 10;
+      return { msg: `That's specific, so okay. ${g} minutes, on that video only. I'll check back at ${hhmm(g)}.`, grant: `+${g} min · ends ${hhmm(g)}` };
+    }
+    if (/(break|tired|bored|relax|just|one more|five|5 min|chill)/.test(t)) {
+      return { msg: `Your 4 pm "short break" ran 50 minutes. Shorts won't recharge you; a walk will. Close this, do problem 1, and I'll be here after.` };
+    }
+    return { msg: `Tell me what exactly you want to watch and why it can't wait until the set is done.` };
+  }
+
+  function wireChat(level) {
+    const form = layer.querySelector('#compose');
+    if (!form) return;
+    const input = form.querySelector('#msg');
+    const thread = layer.querySelector('#thread');
+    const orb = layer.querySelector('#orb');
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const text = input.value.trim();
+      if (!text) return;
+      input.value = '';
+      thread.insertAdjacentHTML('beforeend', `<div class="ami-msg from-me"></div>`);
+      thread.lastElementChild.textContent = text;
+      thread.insertAdjacentHTML('beforeend', `<div class="ami-msg from-ami ami-typing" id="typing"><i></i><i></i><i></i></div>`);
+      orb && orb.classList.add('is-thinking');
+      thread.scrollTop = thread.scrollHeight;
+      setTimeout(() => {
+        layer.querySelector('#typing')?.remove();
+        orb && orb.classList.remove('is-thinking');
+        const r = reply(text, level);
+        thread.insertAdjacentHTML('beforeend', `<div class="ami-msg from-ami"></div>`);
+        thread.lastElementChild.textContent = r.msg;
+        if (r.grant) thread.insertAdjacentHTML('beforeend', `<span class="ami-grant">${r.grant}</span>`);
+        thread.scrollTop = thread.scrollHeight;
+      }, 1100);
+    });
+  }
+
+  function wireRing() {
+    const prog = layer.querySelector('#prog');
+    if (!prog) return;
+    const C = 2 * Math.PI * 38, total = 60;
+    let left = total;
+    prog.style.strokeDasharray = C;
+    prog.style.strokeDashoffset = 0;
+    const txt = layer.querySelector('#ringText'), btn = layer.querySelector('#unlock');
+    timer = setInterval(() => {
+      left -= 1;
+      prog.style.strokeDashoffset = C * (1 - left / total);
+      txt.textContent = `0:${String(Math.max(left, 0)).padStart(2, '0')}`;
+      if (left <= 0) { clearInterval(timer); btn.disabled = false; }
+    }, 1000);
+  }
+
+  function wireGoals() {
+    const chips = layer.querySelectorAll('#budget .ami-chip');
+    chips.forEach(c => c.addEventListener('click', () => chips.forEach(o => o.setAttribute('aria-pressed', String(o === c)))));
+    layer.querySelector('#goalsForm')?.addEventListener('submit', e => { e.preventDefault(); show('nudge'); });
+  }
+
+  function show(name) {
+    clearInterval(timer);
+    const v = views[name]();
+    layer.dataset.level = v.level;
+    stage.dataset.dim = v.dim;
+    layer.innerHTML = v.html;
+    seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-selected', String(b.dataset.s === name)));
+    wireChat(v.level); wireRing(); wireGoals();
+  }
+
+  seg.addEventListener('click', e => { const b = e.target.closest('button'); if (b) show(b.dataset.s); });
+
+  // Mirror the viewer's explicit theme choice onto every .ami-root.
+  const syncTheme = () => {
+    const t = document.documentElement.getAttribute('data-theme');
+    document.querySelectorAll('.ami-root').forEach(el => t ? el.setAttribute('data-theme', t) : el.removeAttribute('data-theme'));
+  };
+  new MutationObserver(syncTheme).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
+  syncTheme();
+  show('checkin');
+})();
+</script>
