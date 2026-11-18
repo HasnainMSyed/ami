@@ -234,10 +234,10 @@ Check the browser side at `chrome://policy`, `chrome://extensions`, `about:polic
 
 ## Mark LVII trial
 
-Mark LVII ("Jarvis") is installed separately in `~/apps/mark-lvii` for a one-week trial. It is **not connected to ami**. Launch it from the app grid.
+Mark LVII ("Jarvis") is installed separately in `~/apps/mark-lvii` for a one-week trial. It is **not connected to ami**. Launch it from the app grid. **Full details: [MARK_LVII_GUIDE.md](MARK_LVII_GUIDE.md).**
 
 **Privacy differences to know:**
-- **Your voice goes to Google.** By default it runs on Gemini Live, which streams your microphone audio while a session is active. Push-to-talk (hold **Ctrl+Space**) keeps the mic closed otherwise. The "Hey Jarvis" wake word is off; if you turn it on, wake-word detection runs locally.
+- **Your voice goes to Google.** By default it runs on Gemini Live, and **push-to-talk and the wake word are both off by default**, so the mic streams continuously while a session is connected. Turn on push-to-talk (hold **Ctrl+Space**) or the local "Hey Jarvis" wake word in its settings.
 - **A copy of your Gemini key** is in `~/apps/mark-lvii/config/api_keys.json` (readable only by you).
 - **The phone dashboard is disabled** on purpose. By default Mark LVII opens a remote-control server to your whole network on every launch; its web server packages were left out, so it can't start.
 - **It keeps its own memory** in `~/apps/mark-lvii/memory/`.
