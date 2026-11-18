@@ -20,7 +20,7 @@ log = logging.getLogger("ami")
 
 def build(cfg, token: str) -> web.Application:
     store = Store(cfg.db_path)
-    engine = Engine(cfg, store, Desktop(cfg.notifications, cfg.voice))
+    engine = Engine(cfg, store, Desktop(cfg.notifications, cfg.voice, cfg.voice_model))
     app = make_app(engine, token)
 
     async def ticker():

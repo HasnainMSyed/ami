@@ -62,6 +62,7 @@ class Config:
     budget_options: list[int] = field(default_factory=lambda: [30, 45, 60, 90])
     notifications: bool = True
     voice: bool = True
+    voice_model: str = str(DATA_DIR / "voices" / "en_US-lessac-medium.onnx")  # Piper; spd-say if missing
     profile: str = "default"
     thresholds: Thresholds = field(default_factory=Thresholds)
     weights: Weights = field(default_factory=Weights)
