@@ -1,0 +1,41 @@
+# Copy to ~/.config/ami/config.yaml and change what you need. Everything here is optional.
+
+# profile: debug            # 1/2/3-minute thresholds for trying things out
+
+thresholds:                 # weighted minutes (learning x0.3, Shorts/feeds x1.5)
+  l1: 15                    # nudge
+  l2: 25                    # pause + check-in chat
+  l3: 40                    # step-away block
+  daily_budget: 90          # the goals card can override this per day
+
+quiet_hours: "23:30-07:00"  # "" to disable
+day_start: "04:00"
+voice: true
+notifications: true
+
+# Where API keys live (git-ignored). Values are read, never logged.
+env_file: ~/projects/ami/.env
+
+llm:
+  # Background work, always local:
+  classifier_model: gemma4:e4b
+
+  # Who you talk to. Default "rules" = built-in, instant.
+  companion_provider: rules
+
+  # --- Gemini (free key) --- check the current model name at ai.google.dev
+  # companion_provider: openai
+  # companion_base_url: https://generativelanguage.googleapis.com/v1beta/openai
+  # companion_model: gemini-flash-latest
+  # companion_api_key_env: GEMINI_API_KEY
+
+  # --- DeepSeek (cheap) ---
+  # companion_provider: openai
+  # companion_base_url: https://api.deepseek.com
+  # companion_model: deepseek-chat
+  # companion_api_key_env: DEEPSEEK_API_KEY
+
+  # --- Local (slow on CPU, ~20 s per reply) ---
+  # companion_provider: ollama
+  # companion_base_url: http://127.0.0.1:11434
+  # companion_model: gemma4:e4b

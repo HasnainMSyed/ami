@@ -77,6 +77,12 @@ def make_app(engine: Engine, token: str) -> web.Application:
     async def status(_):
         return web.json_response(engine.status())
 
+    async def ping(request):
+        try:
+            return web.json_response(engine.ping(str((await body(request)).get("browser", ""))))
+        except ActionError as e:
+            return _err(400, str(e))
+
     async def events(request):
         resp = web.StreamResponse(headers={"Content-Type": "text/event-stream", "Cache-Control": "no-cache"})
         await resp.prepare(request)
@@ -103,6 +109,7 @@ def make_app(engine: Engine, token: str) -> web.Application:
         web.get("/goals", get_goals),
         web.post("/goals", set_goals),
         web.get("/status", status),
+        web.post("/ping", ping),
         web.get("/events", events),
     ])
     return app

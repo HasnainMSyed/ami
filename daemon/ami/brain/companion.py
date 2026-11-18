@@ -8,6 +8,20 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from datetime import datetime
+from pathlib import Path
+
+from .llm import LLMError, parse_json
+
+DEFAULT_PERSONA = Path(__file__).with_name("persona.md")
+LEVEL_MEANING = {
+    0: "no intervention right now",
+    1: "a gentle nudge is on screen",
+    2: "their video is paused and you're checking in",
+    3: "video is blocked for a short cooldown; they can unlock once afterwards",
+    4: "video is locked",
+}
+OUTPUT_RULES = ('Answer with JSON only, exactly: {"reply": "<what you say to them>", '
+                '"grant_minutes": <integer, 0 unless you are granting extra time>}')
 
 SPECIFIC = re.compile(
     r"(lecture|study|course|tutorial|homework|class|learn|research|exam|assignment|deadline|"
@@ -74,3 +88,64 @@ class RuleCompanion:
             g = f" Do one piece of “{goal}” first and" if goal else " Take a real break first and"
             return Reply(f"Shorts and compilations won't recharge you; a walk will.{g} I'll be here after.")
         return Reply("Tell me exactly what you want to watch and why it can't wait.")
+
+
+def load_persona(path: str | None) -> str:
+    for p in (Path(path).expanduser() if path else None, DEFAULT_PERSONA):
+        if p and p.exists():
+            return p.read_text().strip()
+    return "You are ami, a calm companion that helps the user stop doomscrolling."
+
+
+def context_block(ctx: dict) -> str:
+    now = datetime.fromtimestamp(ctx["now"])
+    level = ctx.get("level", 0)
+    lines = [f"Local time: {now:%A %H:%M}.",
+             f"Situation: level {level} of 4, {LEVEL_MEANING.get(level, '')}."]
+    if level == 4 and ctx.get("lock_until"):
+        why = "their quiet hours" if ctx.get("lock_reason") == "quiet_hours" else "they came back after using their break"
+        lines.append(f"Locked until {_hhmm(ctx['lock_until'])} because of {why}.")
+    if ctx.get("title"):
+        lines.append(f'Watching on {ctx.get("site") or "video"}: "{ctx["title"]}".')
+    lines.append(f"Today: {ctx['today_min']:.0f} of {ctx['budget_min']:.0f} budget minutes used "
+                 f"(Shorts {ctx.get('shorts_min', 0):.0f} min, learning {ctx.get('learning_min', 0):.0f} min). "
+                 f"This session: {ctx['session_min']:.0f} min.")
+    lines.append(f'Their goal today: "{ctx["goal"]}".' if ctx.get("goal") else "They didn't set a goal today.")
+    lines.append(f"Extra time granted today: {ctx.get('grants_today', 0)} time(s). "
+                 f"Times they kept watching past a grant: {ctx.get('overruns', 0)}.")
+    cap = ctx.get("grant_cap", 0)
+    lines.append(f"Most you may grant right now: {cap} minutes." if cap else "You may not grant any time right now.")
+    if ctx.get("tamper"):
+        lines.append("Things you noticed: " + " ".join(ctx["tamper"]))
+    if ctx.get("patterns"):
+        lines.append("Patterns from the last two weeks:\n" + ctx["patterns"])
+    if ctx.get("recent_notes"):
+        lines.append("Recent sessions:\n" + "\n".join(f"- {n}" for n in ctx["recent_notes"]))
+    return "\n".join(lines)
+
+
+class LLMCompanion:
+    """The real companion. Any failure raises, and the engine falls back to RuleCompanion."""
+
+    def __init__(self, llm, persona: str):
+        self.llm = llm
+        self.persona = persona
+
+    def attach(self, http) -> None:
+        self.llm.attach(http)
+
+    async def respond(self, text: str, ctx: dict) -> Reply:
+        messages = [{"role": "system", "content": f"{self.persona}\n\n{OUTPUT_RULES}"},
+                    {"role": "system", "content": context_block(ctx)}]
+        for h in ctx.get("history", []):
+            messages.append({"role": "user" if h["role"] == "user" else "assistant", "content": h["text"]})
+        messages.append({"role": "user", "content": text})
+        out = parse_json(await self.llm.chat(messages, max_tokens=220))
+        reply = str(out.get("reply", "")).strip()
+        if not reply:
+            raise LLMError("empty reply")
+        try:
+            grant = int(out.get("grant_minutes") or 0)
+        except (TypeError, ValueError):
+            grant = 0
+        return Reply(reply[:600], max(0, grant))

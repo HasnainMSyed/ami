@@ -136,3 +136,13 @@ api.runtime.onInstalled.addListener(async () => {
   const s = await settings();
   if (!s.token) api.runtime.openOptionsPage();
 });
+
+// Liveness ping: the daemon's watchdog flags a running browser whose extension stays silent.
+const BROWSER = navigator.userAgent.includes("Firefox/") ? "firefox" : "chrome";
+async function ping() {
+  try { await call("/ping", { browser: BROWSER }); } catch { /* offline handled elsewhere */ }
+}
+api.alarms.create("ami-ping", { periodInMinutes: 1 });
+api.alarms.onAlarm.addListener((a) => { if (a.name === "ami-ping") ping(); });
+api.runtime.onStartup.addListener(ping);
+ping();

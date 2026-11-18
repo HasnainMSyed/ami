@@ -10,7 +10,9 @@ import aiohttp
 from aiohttp import web
 
 from .actions.desktop import Desktop
-from .config import load_config, load_or_create_token
+from .brain.companion import LLMCompanion, load_persona
+from .brain.llm import ChatLLM
+from .config import load_config, load_or_create_token, secret
 from .engine import Engine
 from .interfaces.http import make_app
 from .store import Store
@@ -18,9 +20,27 @@ from .store import Store
 log = logging.getLogger("ami")
 
 
+def make_llm(cfg) -> ChatLLM | None:
+    c = cfg.llm
+    if c.companion_provider == "rules":
+        log.info("companion: built-in rules")
+        return None
+    key = secret(c.companion_api_key_env, cfg.env_file)
+    if c.companion_provider == "openai" and not key:
+        log.warning("companion: no API key in %s; using the rule companion", c.companion_api_key_env or "(unset)")
+        return None
+    llm = ChatLLM(c.companion_provider, c.companion_base_url, c.companion_model, key, c.timeout_s)
+    log.info("companion: %r", llm)
+    return llm
+
+
 def build(cfg, token: str) -> web.Application:
     store = Store(cfg.db_path)
-    engine = Engine(cfg, store, Desktop(cfg.notifications, cfg.voice, cfg.voice_model))
+    llm = make_llm(cfg)
+    companion = LLMCompanion(llm, load_persona(cfg.persona_path)) if llm else None
+    # Nightly pattern summaries run in the background, so the local model's speed doesn't matter there.
+    local = ChatLLM("ollama", cfg.llm.classifier_url, cfg.llm.classifier_model, timeout_s=180)
+    engine = Engine(cfg, store, Desktop(cfg.notifications, cfg.voice, cfg.voice_model), companion=companion, llm=local)
     app = make_app(engine, token)
 
     async def ticker():
@@ -33,7 +53,7 @@ def build(cfg, token: str) -> web.Application:
 
     async def on_startup(app):
         app["http"] = aiohttp.ClientSession()
-        engine.classifier.attach(app["http"])
+        engine.attach(app["http"])
         app["ticker"] = asyncio.create_task(ticker())
         log.info("ami listening on http://%s:%s (profile=%s)", cfg.host, cfg.port, cfg.profile)
 

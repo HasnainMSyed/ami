@@ -38,10 +38,15 @@ class Weights:
 class LLM:
     classifier_url: str = "http://127.0.0.1:11434"
     classifier_model: str = "gemma4:e4b"
-    companion_base_url: str = "http://127.0.0.1:11434/v1"
-    companion_model: str = "kimi-k2.6:cloud"
-    companion_api_key_env: str = "AMI_COMPANION_API_KEY"
-    fallback_model: str = "gemma4:e4b"
+    # Who you talk to in the overlay:
+    #   "rules"  - instant built-in companion (default until a cloud model is chosen)
+    #   "ollama" - local model via Ollama's native API (thinking off); slow on CPU
+    #   "openai" - any OpenAI-compatible API: Gemini, DeepSeek, ...
+    # Background work (classification, nightly pattern summaries) always stays on local Ollama.
+    companion_provider: str = "rules"
+    companion_base_url: str = "http://127.0.0.1:11434"
+    companion_model: str = "gemma4:e4b"
+    companion_api_key_env: str = ""   # name of the env var holding the key, e.g. GEMINI_API_KEY
     timeout_s: float = 45.0
 
 
@@ -63,6 +68,14 @@ class Config:
     notifications: bool = True
     voice: bool = True
     voice_model: str = str(DATA_DIR / "voices" / "en_US-lessac-medium.onnx")  # Piper; spd-say if missing
+    env_file: str = ""            # optional .env with API keys (never logged)
+    persona_path: str = str(CONFIG_DIR / "persona.md")  # overrides the built-in persona if present
+    watchdog: bool = True
+    watchdog_silence_s: int = 180  # a managed browser running this long without an extension ping is flagged
+    policy_files: list[str] = field(default_factory=lambda: [
+        "/etc/opt/chrome/policies/managed/ami.json",
+        "/etc/firefox/policies/policies.json",
+    ])
     profile: str = "default"
     thresholds: Thresholds = field(default_factory=Thresholds)
     weights: Weights = field(default_factory=Weights)
@@ -114,6 +127,30 @@ def load_or_create_token(path: str | os.PathLike) -> str:
     with os.fdopen(fd, "w") as fh:
         fh.write(token + "\n")
     return token
+
+
+def read_env_file(path: str | os.PathLike | None) -> dict[str, str]:
+    """Minimal KEY=VALUE parser for a .env file. Missing file -> {}."""
+    out: dict[str, str] = {}
+    if not path:
+        return out
+    p = Path(path).expanduser()
+    if not p.exists():
+        return out
+    for line in p.read_text().splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        k, v = line.split("=", 1)
+        out[k.strip().removeprefix("export ").strip()] = v.strip().strip('"').strip("'")
+    return out
+
+
+def secret(name: str, env_file: str | None) -> str | None:
+    """Look a secret up in the process environment first, then in the .env file."""
+    if not name:
+        return None
+    return os.environ.get(name) or read_env_file(env_file).get(name) or None
 
 
 def parse_hhmm(s: str) -> int:

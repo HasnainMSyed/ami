@@ -8,7 +8,9 @@ from typing import Callable
 
 from .brain.classifier import Classifier
 from .brain.companion import Reply, RuleCompanion
+from .brain.memory import Memory
 from .bus import Bus
+from .sensors.watchdog import Watchdog
 from .config import Config
 from .rules.doomscroll import Decision, evaluate
 from .sensors.browser import Heartbeat
@@ -27,9 +29,15 @@ def _hhmm(ts: float) -> str:
     return datetime.fromtimestamp(ts).strftime("%H:%M")
 
 
+GRANT_CAP = {0: 15, 1: 15, 2: 15, 3: 10, 4: 10}
+TAMPER_KINDS = ("unmanaged_app", "extension_silent", "policy_changed")
+BROWSER_NAMES = {"chrome": "Chrome", "firefox": "Firefox"}
+
+
 class Engine:
     def __init__(self, cfg: Config, store: Store, desktop, companion=None,
-                 classifier: Classifier | None = None, clock: Callable[[], float] = time.time):
+                 classifier: Classifier | None = None, clock: Callable[[], float] = time.time,
+                 watchdog: Watchdog | None = None, llm=None):
         self.cfg = cfg
         self.store = store
         self.desktop = desktop
@@ -38,6 +46,10 @@ class Engine:
         self.classifier = classifier or Classifier(cfg, store, clock)
         self.fallback = RuleCompanion()
         self.companion = companion or self.fallback
+        self.llm = llm  # used for nightly memory compression
+        self.memory = Memory(store)
+        self.watchdog = watchdog or (Watchdog(cfg.watchdog_silence_s, cfg.policy_files) if cfg.watchdog else None)
+        self._episode_start = 0.0
         self._openings: dict[int, str] = {}
         self.tracker = Tracker(cfg, *self._restore())
         self.tracker.roll(clock())
@@ -56,9 +68,17 @@ class Engine:
         self.store.put_kv("day", self.tracker.day.to_dict())
         self.store.put_kv("session", self.tracker.session.to_dict() if self.tracker.session else None)
 
+    def attach(self, http) -> None:
+        """Give every component that talks to a model the shared HTTP session."""
+        self.classifier.attach(http)
+        for part in (self.companion, self.llm):
+            if hasattr(part, "attach"):
+                part.attach(http)
+
     def _save_ended(self) -> None:
         for s, end, key in self.tracker.ended:
             self.store.save_session(s, end, key)
+            self.memory.on_session_end(s, end)
             self.bus.publish("session_ended", {"id": s.id, "minutes": round(s.raw_s / 60, 1),
                                                "weighted_min": round(s.weighted_min, 1), "max_level": s.max_level})
         self.tracker.ended.clear()
@@ -75,12 +95,48 @@ class Engine:
         return self._decide(now, hb.active)
 
     def tick(self) -> None:
-        """Called periodically: ends stale sessions, rolls the day, expires locks."""
+        """Called periodically: ends stale sessions, rolls the day, runs the watchdog."""
         now = self.clock()
         if self.tracker.roll(now):
             self._openings.clear()
+            self._spawn(self.memory.compress(now, self.llm))
         self._save_ended()
+        if self.watchdog:
+            for kind, payload in self.watchdog.check(now):
+                self._on_watchdog(kind, payload, now)
         self._persist()
+
+    @staticmethod
+    def _spawn(coro) -> None:
+        try:
+            import asyncio
+            asyncio.get_running_loop().create_task(coro)
+        except RuntimeError:
+            coro.close()  # no loop (tests, shutdown): skip best-effort work
+
+    def ping(self, browser: str) -> dict:
+        if browser not in BROWSER_NAMES:
+            raise ActionError("unknown browser")
+        if self.watchdog:
+            self.watchdog.ping(browser, self.clock())
+        return {"ok": True}
+
+    def _on_watchdog(self, kind: str, p: dict, now: float) -> None:
+        self.bus.publish(kind, p)
+        if kind == "unmanaged_app":
+            self.desktop.notify(f"ami can't see {p['app']}", "Video there isn't tracked. I'll remember it was open.", "critical")
+            if p["minutes"] == 0:
+                self.desktop.speak(f"Heads up, I can't see what you're doing in {p['app']}.")
+        elif kind == "unmanaged_app_closed" and p["minutes"] >= 2:
+            self.memory.note(now, f"{p['app']} was open {datetime.fromtimestamp(p['since']):%a %H:%M}–{datetime.fromtimestamp(now):%H:%M} "
+                                  f"({p['minutes']} min), where ami can't see.")
+        elif kind == "extension_silent":
+            name = BROWSER_NAMES.get(p["browser"], p["browser"])
+            self.desktop.notify(f"ami isn't running in {name}", "The extension may be disabled or missing in a profile.", "critical")
+            self.desktop.speak(f"I've lost sight of {name}. Is the ami extension turned off?")
+        elif kind == "policy_changed":
+            self.desktop.notify("ami's browser policy changed", p["path"], "critical")
+            self.desktop.speak("Someone changed ami's browser settings.")
 
     # decisions
     def _decide(self, now: float, active: bool) -> dict:
@@ -98,6 +154,8 @@ class Engine:
 
     def _on_level_change(self, old: int, d: Decision, now: float) -> None:
         self._openings.pop(d.level, None)
+        if d.level >= 2 and old < 2:
+            self._episode_start = now  # the chat history the companion sees starts here
         self.bus.publish("level", {"from": old, "to": d.level, "reason": d.reason})
         if d.level <= old:
             return
@@ -113,7 +171,29 @@ class Engine:
         elif d.level == 4:
             self.desktop.speak(f"Video is locked until {_hhmm(d.lock_until)}.")
 
-    def context(self, now: float, d: Decision | None = None) -> dict:
+    def _tamper_lines(self, now: float) -> list[str]:
+        out = []
+        for e in self.store.events_since(now - 86400, TAMPER_KINDS)[-5:]:
+            when = datetime.fromtimestamp(e["ts"]).strftime("%a %H:%M")
+            if e["kind"] == "unmanaged_app":
+                out.append(f"{when}: {e['app']} was open, where you can't see.")
+            elif e["kind"] == "extension_silent":
+                out.append(f"{when}: the ami extension went silent in {BROWSER_NAMES.get(e['browser'], e['browser'])}.")
+            elif e["kind"] == "policy_changed":
+                out.append(f"{when}: ami's browser policy file was {'removed' if e.get('removed') else 'edited'}.")
+        return out
+
+    def context(self, now: float, d: Decision | None = None, rich: bool = False) -> dict:
+        ctx = self._base_context(now, d)
+        level = ctx["level"]
+        ctx["grant_cap"] = max(0, min(self.cfg.max_grant_min, GRANT_CAP.get(level, 10) - 5 * ctx["overruns"]))
+        if rich:  # only the chat needs memory, history and watchdog findings
+            ctx.update(self.memory.context(now))
+            ctx["tamper"] = self._tamper_lines(now)
+            ctx["history"] = self.store.recent_chats(self._episode_start, 12) if self._episode_start else []
+        return ctx
+
+    def _base_context(self, now: float, d: Decision | None = None) -> dict:
         day, s = self.tracker.day, self.tracker.session
         goal = self.store.get_goal(day.key)
         return {
@@ -231,14 +311,16 @@ class Engine:
         text = text.strip()[:1000]
         if not text:
             raise ActionError("empty message")
-        ctx = self.context(now)
+        if not self._episode_start:
+            self._episode_start = now
+        ctx = self.context(now, rich=True)
         self.store.add_chat(now, "user", text, ctx["level"])
         try:
             reply: Reply = await self.companion.respond(text, ctx)
-        except Exception:  # the LLM companion failing must never leave you without an answer
-            log.exception("companion failed; using rule companion")
+        except Exception as e:  # the LLM companion failing must never leave you without an answer
+            log.warning("companion failed (%s); using rule companion", e)
             reply = await self.fallback.respond(text, ctx)
-        minutes = max(0, min(int(reply.grant_minutes), self.cfg.max_grant_min))
+        minutes = max(0, min(int(reply.grant_minutes), ctx["grant_cap"]))
         if minutes:
             self.grant(minutes, text, now)
         self.store.add_chat(now, "ami", reply.text, ctx["level"])
