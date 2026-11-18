@@ -55,7 +55,7 @@ amo_key="$(grep -E '^AMO_JWT_ISSUER=' "$envfile" 2>/dev/null | cut -d= -f2- || t
 amo_secret="$(grep -E '^AMO_JWT_SECRET=' "$envfile" 2>/dev/null | cut -d= -f2- || true)"
 if [ -n "$amo_key" ] && [ -n "$amo_secret" ]; then
   WEB_EXT_API_KEY="$amo_key" WEB_EXT_API_SECRET="$amo_secret" \
-    npx -y web-ext@8.3.0 sign --source-dir "$stage/ami" --artifacts-dir "$stage/xpi" --channel unlisted
+    npx -y web-ext@10.7.0 sign --source-dir "$stage/ami" --artifacts-dir "$stage/xpi" --channel unlisted
   xpi="$(ls -t "$stage"/xpi/*.xpi | head -1)"
   cp "$xpi" "$out/ami.xpi"
   echo "Firefox: signed $(basename "$xpi")"
