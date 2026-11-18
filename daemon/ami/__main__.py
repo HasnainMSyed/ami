@@ -5,6 +5,7 @@ import argparse
 import asyncio
 import contextlib
 import logging
+from pathlib import Path
 
 import aiohttp
 from aiohttp import web
@@ -42,7 +43,7 @@ def build(cfg, token: str) -> web.Application:
     # Nightly pattern summaries run in the background, so the local model's speed doesn't matter there.
     local = ChatLLM("ollama", cfg.llm.classifier_url, cfg.llm.classifier_model, timeout_s=180)
     engine = Engine(cfg, store, Desktop(cfg.notifications, cfg.voice, cfg.voice_model), companion=companion, llm=local)
-    app = make_app(engine, token)
+    app = make_app(engine, token, ext_dir=Path(cfg.db_path).parent / "ext")
 
     async def ticker():
         while True:

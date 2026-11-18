@@ -46,6 +46,17 @@ async def test_bad_input(client):
     assert (await client.post("/chat", json={"text": "  "}, headers=H)).status == 400
 
 
+async def test_extension_files_are_public_and_whitelisted(aiohttp_client, engine, tmp_path):
+    (tmp_path / "updates.xml").write_text("<gupdate/>")
+    (tmp_path / "secret.txt").write_text("nope")
+    c = await aiohttp_client(make_app(engine, TOKEN, ext_dir=tmp_path))
+    r = await c.get("/ext/updates.xml")  # no token: browsers' updaters can't send one
+    assert r.status == 200 and r.headers["Content-Type"].startswith("text/xml")
+    assert (await c.get("/ext/secret.txt")).status == 404
+    assert (await c.get("/ext/ami.crx")).status == 404
+    assert (await c.get("/ext/..%2Ftoken")).status == 404
+
+
 async def test_goals_and_chat(client):
     r = await client.post("/goals", json={"goal": "Thermo set", "budget_min": 45}, headers=H)
     assert (await r.json())["stats"]["budget_min"] == 45

@@ -8,6 +8,7 @@ from __future__ import annotations
 import asyncio
 import hmac
 import json
+from pathlib import Path
 
 from aiohttp import web
 
@@ -15,16 +16,18 @@ from ..engine import ActionError, Engine
 from ..sensors.browser import Heartbeat
 
 EXTENSION_ORIGINS = ("chrome-extension://", "moz-extension://")
+# Packaged extension files the browsers' policy installers download (public, read-only).
+EXT_FILES = {"updates.xml": "text/xml", "ami.crx": "application/x-chrome-extension", "ami.xpi": "application/x-xpinstall"}
 
 
 def _err(status: int, msg: str) -> web.Response:
     return web.json_response({"error": msg}, status=status)
 
 
-def make_app(engine: Engine, token: str) -> web.Application:
+def make_app(engine: Engine, token: str, ext_dir: str | Path | None = None) -> web.Application:
     @web.middleware
     async def guard(request: web.Request, handler):
-        if request.path == "/health":
+        if request.path == "/health" or request.path.startswith("/ext/"):
             return await handler(request)
         origin = request.headers.get("Origin")
         if origin and not origin.startswith(EXTENSION_ORIGINS):
@@ -77,6 +80,13 @@ def make_app(engine: Engine, token: str) -> web.Application:
     async def status(_):
         return web.json_response(engine.status())
 
+    async def ext_file(request):
+        name = request.match_info["name"]
+        path = Path(ext_dir) / name if ext_dir and name in EXT_FILES else None
+        if not path or not path.is_file():
+            raise web.HTTPNotFound()
+        return web.FileResponse(path, headers={"Content-Type": EXT_FILES[name], "Cache-Control": "no-cache"})
+
     async def ping(request):
         try:
             return web.json_response(engine.ping(str((await body(request)).get("browser", ""))))
@@ -110,6 +120,7 @@ def make_app(engine: Engine, token: str) -> web.Application:
         web.post("/goals", set_goals),
         web.get("/status", status),
         web.post("/ping", ping),
+        web.get("/ext/{name}", ext_file),
         web.get("/events", events),
     ])
     return app
