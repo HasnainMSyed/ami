@@ -20,14 +20,24 @@ LEVEL_MEANING = {
     3: "video is blocked for a short cooldown; they can unlock once afterwards",
     4: "video is locked",
 }
-OUTPUT_RULES = ('Answer with JSON only, exactly: {"reply": "<what you say to them>", '
-                '"grant_minutes": <integer, 0 unless you are granting extra time>}')
+OUTPUT_RULES = ('Answer with JSON only, exactly these two fields and nothing else: '
+                '{"reply": "<what you say to them>", "grant_minutes": <integer, 0 unless you are granting extra time>}')
+REPLY_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "reply": {"type": "string", "description": "What ami says to the user"},
+        "grant_minutes": {"type": "integer", "description": "Extra minutes granted, 0 for none"},
+    },
+    "required": ["reply", "grant_minutes"],
+    "additionalProperties": False,
+}
 
 SPECIFIC = re.compile(
     r"(lecture|study|course|tutorial|homework|class|learn|research|exam|assignment|deadline|"
     r"work|meeting|professor|teacher|project|urgent|emergency|课|学习|作业|考试)",
     re.IGNORECASE,
 )
+CJK = re.compile(r"[㐀-䶿一-鿿]")
 WEAK = re.compile(r"(break|tired|bored|relax|\bjust\b|one more|chill|five|5 ?min|whatever|idk)", re.IGNORECASE)
 
 
@@ -135,12 +145,14 @@ class LLMCompanion:
         self.llm.attach(http)
 
     async def respond(self, text: str, ctx: dict) -> Reply:
-        messages = [{"role": "system", "content": f"{self.persona}\n\n{OUTPUT_RULES}"},
-                    {"role": "system", "content": context_block(ctx)}]
+        lang = "Simplified Chinese" if CJK.search(text) else "English"
+        system = (f"{self.persona}\n\nWhat you know right now:\n{context_block(ctx)}\n\n"
+                  f"Write the reply in {lang}.\n{OUTPUT_RULES}")
+        messages = [{"role": "system", "content": system}]
         for h in ctx.get("history", []):
             messages.append({"role": "user" if h["role"] == "user" else "assistant", "content": h["text"]})
         messages.append({"role": "user", "content": text})
-        out = parse_json(await self.llm.chat(messages, max_tokens=220))
+        out = parse_json(await self.llm.chat(messages, max_tokens=400, schema=REPLY_SCHEMA))
         reply = str(out.get("reply", "")).strip()
         if not reply:
             raise LLMError("empty reply")

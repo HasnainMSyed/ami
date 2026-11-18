@@ -29,7 +29,8 @@ def make_llm(cfg) -> ChatLLM | None:
     if c.companion_provider == "openai" and not key:
         log.warning("companion: no API key in %s; using the rule companion", c.companion_api_key_env or "(unset)")
         return None
-    llm = ChatLLM(c.companion_provider, c.companion_base_url, c.companion_model, key, c.timeout_s)
+    llm = ChatLLM(c.companion_provider, c.companion_base_url, c.companion_model, key, c.timeout_s,
+                  reasoning_effort=c.companion_reasoning_effort)
     log.info("companion: %r", llm)
     return llm
 

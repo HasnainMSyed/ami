@@ -52,7 +52,8 @@ async def test_llm_companion_builds_conversation_and_parses_reply():
     r = await c.respond("I need the entropy lecture for tomorrow's quiz", ctx(history=history))
     assert r.grant_minutes == 10 and "Thermo" in r.text
     roles = [m["role"] for m in llm.calls[0]]
-    assert roles == ["system", "system", "user", "assistant", "user"]
+    assert roles == ["system", "user", "assistant", "user"]
+    assert llm.calls[0][0]["content"].rstrip().endswith("}")  # output rules come last
 
 
 async def test_engine_clamps_llm_grant_to_cap(cfg, store, desktop, clock):

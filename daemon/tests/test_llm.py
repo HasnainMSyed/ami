@@ -35,24 +35,27 @@ async def test_ollama_native_api_turns_thinking_off(aiohttp_server):
     assert seen["think"] is False and seen["format"] == "json" and seen["stream"] is False
 
 
-async def test_openai_compatible_sends_key_and_retries_without_json_mode(aiohttp_server):
+async def test_openai_compatible_steps_down_output_modes(aiohttp_server):
     calls = []
 
     async def completions(request):
         body = await request.json()
-        calls.append((request.headers.get("Authorization"), "response_format" in body))
-        if "response_format" in body:
+        fmt = (body.get("response_format") or {}).get("type")
+        calls.append((request.headers.get("Authorization"), fmt, body.get("reasoning_effort")))
+        if fmt is not None:
             return web.json_response({"error": "unsupported"}, status=400)
         return web.json_response({"choices": [{"message": {"content": '{"reply": "fine"}'}}]})
 
     app = web.Application()
     app.router.add_post("/v1/chat/completions", completions)
     server = await aiohttp_server(app)
-    llm = ChatLLM("openai", str(server.make_url("/v1")), "deepseek-chat", api_key="k123")
+    llm = ChatLLM("openai", str(server.make_url("/v1")), "m", api_key="k123", reasoning_effort="minimal")
     async with ClientSession() as http:
         llm.attach(http)
-        assert await llm.chat([{"role": "user", "content": "hi"}]) == '{"reply": "fine"}'
-    assert calls == [("Bearer k123", True), ("Bearer k123", False)]
+        out = await llm.chat([{"role": "user", "content": "hi"}], schema={"type": "object"})
+    assert out == '{"reply": "fine"}'
+    assert calls == [("Bearer k123", "json_schema", "minimal"), ("Bearer k123", "json_object", "minimal"),
+                     ("Bearer k123", None, "minimal")]
 
 
 async def test_http_errors_raise(aiohttp_server):

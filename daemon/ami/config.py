@@ -47,7 +47,8 @@ class LLM:
     companion_base_url: str = "http://127.0.0.1:11434"
     companion_model: str = "gemma4:e4b"
     companion_api_key_env: str = ""   # name of the env var holding the key, e.g. GEMINI_API_KEY
-    timeout_s: float = 45.0
+    companion_reasoning_effort: str = ""  # OpenAI-style APIs only; Gemini flash-lite: "minimal"
+    timeout_s: float = 20.0
 
 
 @dataclass

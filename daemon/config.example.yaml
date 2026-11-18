@@ -23,11 +23,12 @@ llm:
   # Who you talk to. Default "rules" = built-in, instant.
   companion_provider: rules
 
-  # --- Gemini (free key) --- check the current model name at ai.google.dev
+  # --- Gemini (free key): ~1 s replies. flash-lite needs minimal thinking or replies come back empty.
   # companion_provider: openai
   # companion_base_url: https://generativelanguage.googleapis.com/v1beta/openai
-  # companion_model: gemini-flash-latest
+  # companion_model: gemini-flash-lite-latest
   # companion_api_key_env: GEMINI_API_KEY
+  # companion_reasoning_effort: minimal
 
   # --- DeepSeek (cheap) ---
   # companion_provider: openai

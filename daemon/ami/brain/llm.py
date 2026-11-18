@@ -16,13 +16,15 @@ class LLMError(Exception):
 
 
 class ChatLLM:
-    def __init__(self, provider: str, base_url: str, model: str, api_key: str | None = None, timeout_s: float = 45.0):
+    def __init__(self, provider: str, base_url: str, model: str, api_key: str | None = None, timeout_s: float = 45.0,
+                 reasoning_effort: str = ""):
         if provider not in ("ollama", "openai"):
             raise ValueError(f"unknown provider {provider!r}")
         self.provider = provider
         self.base_url = base_url.rstrip("/")
         self.model = model
         self.api_key = api_key
+        self.reasoning_effort = reasoning_effort  # e.g. "minimal" so thinking models don't eat the token budget
         self.timeout = aiohttp.ClientTimeout(total=timeout_s)
         self.http: aiohttp.ClientSession | None = None
 
@@ -32,39 +34,52 @@ class ChatLLM:
     def __repr__(self) -> str:  # never show the key
         return f"ChatLLM({self.provider}, {self.base_url}, {self.model})"
 
-    async def chat(self, messages: list[dict], max_tokens: int = 300, temperature: float = 0.6, json_mode: bool = True) -> str:
+    async def chat(self, messages: list[dict], max_tokens: int = 300, temperature: float = 0.6,
+                   json_mode: bool = True, schema: dict | None = None) -> str:
+        """`schema` (a JSON Schema) forces the reply's shape where the provider supports it."""
         if self.http is None:
             raise LLMError("no HTTP session attached")
         try:
             if self.provider == "ollama":
-                return await self._ollama(messages, max_tokens, temperature, json_mode)
-            return await self._openai(messages, max_tokens, temperature, json_mode)
+                return await self._ollama(messages, max_tokens, temperature, json_mode, schema)
+            return await self._openai(messages, max_tokens, temperature, json_mode, schema)
         except (aiohttp.ClientError, TimeoutError) as e:
             raise LLMError(f"{self.provider} request failed: {e}") from e
 
-    async def _ollama(self, messages, max_tokens, temperature, json_mode) -> str:
+    async def _ollama(self, messages, max_tokens, temperature, json_mode, schema) -> str:
         body = {"model": self.model, "messages": messages, "stream": False, "think": False,
                 "options": {"temperature": temperature, "num_predict": max_tokens}}
-        if json_mode:
+        if schema:
+            body["format"] = schema
+        elif json_mode:
             body["format"] = "json"
         async with self.http.post(f"{self.base_url}/api/chat", json=body, timeout=self.timeout) as r:
             if r.status != 200:
                 raise LLMError(f"ollama HTTP {r.status}: {(await r.text())[:200]}")
             return (await r.json())["message"]["content"]
 
-    async def _openai(self, messages, max_tokens, temperature, json_mode) -> str:
+    async def _openai(self, messages, max_tokens, temperature, json_mode, schema) -> str:
         headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
         body = {"model": self.model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
-        if json_mode:
-            body["response_format"] = {"type": "json_object"}
+        if self.reasoning_effort:
+            body["reasoning_effort"] = self.reasoning_effort
+        # Try the strictest output mode first, then step down if the provider rejects it.
+        formats = []
+        if schema:
+            formats.append({"type": "json_schema", "json_schema": {"name": "reply", "schema": schema, "strict": True}})
+        if json_mode or schema:
+            formats.append({"type": "json_object"})
+        formats.append(None)
         url = f"{self.base_url}/chat/completions"
-        async with self.http.post(url, json=body, headers=headers, timeout=self.timeout) as r:
-            if r.status == 400 and json_mode:
-                # Some providers reject response_format; the prompt still asks for JSON.
-                body.pop("response_format")
-                async with self.http.post(url, json=body, headers=headers, timeout=self.timeout) as r2:
-                    return await self._openai_text(r2)
-            return await self._openai_text(r)
+        for i, fmt in enumerate(formats):
+            body.pop("response_format", None)
+            if fmt:
+                body["response_format"] = fmt
+            async with self.http.post(url, json=body, headers=headers, timeout=self.timeout) as r:
+                if r.status == 400 and i < len(formats) - 1:
+                    continue
+                return await self._openai_text(r)
+        raise LLMError("unreachable")
 
     @staticmethod
     async def _openai_text(r: aiohttp.ClientResponse) -> str:
