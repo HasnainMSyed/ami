@@ -9,6 +9,7 @@ from typing import Callable
 from .brain.classifier import Classifier
 from .brain.companion import Reply, RuleCompanion
 from .brain.memory import Memory
+from .brain import reflect
 from .bus import Bus
 from .sensors.watchdog import Watchdog
 from .config import Config, host_ignored
@@ -115,6 +116,9 @@ class Engine:
         if self.tracker.roll(now):
             self._openings.clear()
             self._spawn(self.memory.compress(now, self.llm))
+            if datetime.strptime(self.tracker.day.key, "%Y-%m-%d").weekday() == 0:  # a new ami week
+                self._spawn(self.make_reflection(reflect.week_start(now, self.cfg.day_start, 1)))
+        self._reflection_notice(now)
         self._save_ended()
         if self.watchdog:
             for kind, payload in self.watchdog.check(now):
@@ -205,7 +209,7 @@ class Engine:
         elif not d.locked and d.left <= 2 and hb.page_type != "game":
             ui = {"kind": "chess_note", "games": d.games, "cap": d.cap, "left": d.left, "streak": d.streak}
         else:
-            ui = {"kind": "none"}
+            ui = (hb.active and self._reflection_ui()) or {"kind": "none"}
         self._persist()
         return {"scope": "chess", "level": 0, "ui": ui, "chess": self._chess_stats(d)}
 
@@ -335,6 +339,8 @@ class Engine:
         elif active and not day.goals_prompted and hb is not None and hb.site in VIDEO_SITES:
             ui = {"kind": "goals", "budget_options": self.cfg.budget_options,
                   "default_budget": int(self.cfg.thresholds.daily_budget)}
+        elif active and hb is not None and hb.site in VIDEO_SITES and (refl := self._reflection_ui()):
+            ui = refl
         elif d.reason == "finishing" and hb is not None:
             ui = {"kind": "finishing", "remaining_min": round((hb.remaining_s or 0) / 60)}
         elif d.reason == "later":
@@ -367,6 +373,54 @@ class Engine:
             "grant_until": day.grant_until or None,
             "heartbeat_s": self.cfg.heartbeat_s,
         }
+
+    # weekly reflection
+    def _chess_games(self) -> list[Game]:
+        return self.chess.games if self.chess else []
+
+    async def make_reflection(self, start: float) -> dict:
+        st = reflect.compute(self.store, self._chess_games(), start, start + 7 * 86400)
+        text = await reflect.write(st, self.llm)
+        out = {"stats": st, "text": text, "made": self.clock()}
+        key = datetime.fromtimestamp(start).strftime("%Y-%m-%d")
+        self.store.put_kv(f"reflection:{key}", out)
+        self.store.put_kv("reflection_unseen", key)
+        self.store.put_kv("reflection_notify", key)
+        self.memory.note(self.clock(), f"Week of {st['label']}: {text}")
+        self.bus.publish("reflection", {"week": key})
+        return out
+
+    def _reflection_notice(self, now: float) -> None:
+        key = self.store.get_kv("reflection_notify")
+        if key and datetime.fromtimestamp(now).hour >= 9 and not in_quiet(now, self.cfg.quiet_hours):
+            self.store.put_kv("reflection_notify", None)
+            self.desktop.notify("Your week with ami is ready", "Open it from the ami button in the browser toolbar.")
+
+    def week(self, offset: int = 0) -> dict:
+        now = self.clock()
+        offset = max(0, min(int(offset), 52))
+        start = reflect.week_start(now, self.cfg.day_start, offset)
+        key = datetime.fromtimestamp(start).strftime("%Y-%m-%d")
+        saved = self.store.get_kv(f"reflection:{key}") if offset else None
+        if saved:
+            return {**saved, "offset": offset, "complete": True}
+        st = reflect.compute(self.store, self._chess_games(), start, min(now, start + 7 * 86400))
+        return {"stats": st, "text": reflect.template(st), "offset": offset, "complete": offset > 0}
+
+    def summary(self, scope: str, offset: int = 0) -> dict:
+        if scope == "week":
+            return self.week(offset)
+        now = self.clock()
+        items = self.later()
+        return {**self.status(), "later_waiting": sum(1 for i in items if not i["opened"]),
+                "later_window": self.cfg.later_window, "later_open": self.in_later_window(now)}
+
+    def _reflection_ui(self) -> dict | None:
+        key = self.store.get_kv("reflection_unseen")
+        saved = self.store.get_kv(f"reflection:{key}") if key else None
+        if not saved:
+            return None
+        return {"kind": "reflection", "label": saved["stats"]["label"], "text": saved["text"]}
 
     # session intent
     @staticmethod
@@ -480,6 +534,8 @@ class Engine:
                 s.intent_noted = True
         elif action == "dismiss_later":
             day.later_dismissed = True
+        elif action == "seen_reflection":
+            self.store.put_kv("reflection_unseen", None)
         elif action == "stop":
             self.bus.publish("stopped", {"level": day.level, "session_min": round(s.weighted_min, 1) if s else 0})
             if s:

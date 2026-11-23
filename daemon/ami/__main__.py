@@ -78,6 +78,8 @@ def main() -> None:
     p.add_argument("--config", help="path to config.yaml (default ~/.config/ami/config.yaml)")
     p.add_argument("--profile", help="default | debug")
     p.add_argument("--print-token", action="store_true", help="print the extension token and exit")
+    p.add_argument("--week", nargs="?", const=1, type=int, metavar="N",
+                   help="print the reflection for N weeks ago (default 1 = last week; 0 = this week so far)")
     args = p.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(levelname)s %(message)s")
@@ -85,6 +87,16 @@ def main() -> None:
     token = load_or_create_token(cfg.token_path)
     if args.print_token:
         print(token)
+        return
+    if args.week is not None:
+        from .actions.desktop import Desktop as _D
+        engine = Engine(cfg, Store(cfg.db_path), _D(False, False, cfg.voice_model))
+        w = engine.week(args.week)
+        st = w["stats"]
+        print(f"Week of {st['label']}{'' if w.get('complete') else ' (so far)'}\n")
+        print(w["text"], "\n")
+        print(f"Video {st['video_min']:.0f} min · {st['sessions']} sessions · chess {st['chess_games']} games "
+              f"({st['chess_bullet']} bullet) · urges ridden out {st['urges_ridden']}/{sum(st['urges'].values())}")
         return
     web.run_app(build(cfg, token), host=cfg.host, port=cfg.port, print=None)
 

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ami</title>
+  <link rel="stylesheet" href="ui/tokens.css">
+  <link rel="stylesheet" href="ui/overlay.css">
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body class="ami-root" data-level="1">
+  <header class="top">
+    <span class="ami-orb"></span>
+    <p class="ami-title">ami</p>
+    <nav class="tabs" role="tablist">
+      <button role="tab" data-tab="today" aria-selected="true">Today</button>
+      <button role="tab" data-tab="later" aria-selected="false">Later</button>
+      <button role="tab" data-tab="week" aria-selected="false">Week</button>
+    </nav>
+  </header>
+  <main>
+    <section data-panel="today" role="tabpanel"></section>
+    <section data-panel="later" role="tabpanel" hidden></section>
+    <section data-panel="week" role="tabpanel" hidden></section>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>

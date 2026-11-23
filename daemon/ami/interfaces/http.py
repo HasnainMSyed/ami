@@ -80,6 +80,14 @@ def make_app(engine: Engine, token: str, ext_dir: str | Path | None = None) -> w
     async def status(_):
         return web.json_response(engine.status())
 
+    async def summary(request):
+        scope = request.query.get("scope", "today")
+        try:
+            offset = int(request.query.get("offset", "0"))
+        except ValueError:
+            return _err(400, "offset must be a number")
+        return web.json_response(engine.summary(scope, offset))
+
     async def intent(request):
         data = await body(request)
         minutes = data.get("minutes")
@@ -153,6 +161,7 @@ def make_app(engine: Engine, token: str, ext_dir: str | Path | None = None) -> w
         web.post("/goals", set_goals),
         web.get("/status", status),
         web.post("/intent", intent),
+        web.get("/summary", summary),
         web.get("/later", get_later),
         web.post("/later", add_later),
         web.delete("/later/{id}", del_later),

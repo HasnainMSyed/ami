@@ -336,6 +336,14 @@
             `<li><button type="button" class="ami-link" data-open="${esc(i.url)}">${esc(i.title || i.url)}</button></li>`).join("")}</ul>
           <div class="ami-row"><button class="ami-btn ami-btn-ghost" data-act="dismiss_later">Not now</button></div>
         </div></div>`,
+    reflection: (ui) => `
+      <div class="ami-toast ami-glass ami-enter" role="status"><span class="ami-orb"></span>
+        <div class="ami-body">
+          <div><span class="ami-eyebrow">Your week · ${esc(ui.label)}</span>
+            <p class="ami-text" style="margin-top:6px">${esc(ui.text)}</p></div>
+          <p class="ami-text" style="font-size:12px">Charts and earlier weeks: the ami button in the toolbar.</p>
+          <div class="ami-row"><button class="ami-btn ami-btn-primary" data-act="seen_reflection">Got it</button></div>
+        </div></div>`,
     chess_locked: (ui) => {
       const head = ui.reason === "cap" ? `That's ${n(ui.games)} games today.`
         : ui.reason === "tilt" ? `${n(ui.streak)} losses in a row.`
