@@ -75,13 +75,15 @@ fi
 # ---- Firefox ----
 if [ -f "$data/ami.xpi" ]; then
   mkdir -p "$(dirname "$firefox_file")"
-  python3 - "$firefox_file" "$ff_id" "$url" "$token" <<'PY'
+  # The version in the address makes Firefox see a new package and reinstall it after a rebuild.
+  ff_version="$(cat "$data/version" 2>/dev/null || echo 0)"
+  python3 - "$firefox_file" "$ff_id" "$url" "$token" "$ff_version" <<'PY'
 import json, os, sys
-path, ext, url, token = sys.argv[1:5]
+path, ext, url, token, version = sys.argv[1:6]
 d = json.load(open(path)) if os.path.exists(path) else {}
 p = d.setdefault("policies", {})
 p.setdefault("ExtensionSettings", {})[ext] = {"installation_mode": "force_installed",
-                                             "install_url": f"{url}/ext/ami.xpi",
+                                             "install_url": f"{url}/ext/ami.xpi?v={version}",
                                              "private_browsing": True}
 p.setdefault("3rdparty", {}).setdefault("Extensions", {})[ext] = {"daemonUrl": url, "token": token}
 with open(path, "w") as f:

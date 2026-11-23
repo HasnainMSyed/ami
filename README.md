@@ -1,6 +1,6 @@
 # ami
 
-A desktop companion that stops doomscrolling on YouTube and Bilibili. It escalates gently, from a nudge to a conversation to a lock, and it remembers your goals and patterns.
+A desktop companion that stops doomscrolling: long videos on YouTube, Bilibili or any site, and bullet chess on chess.com. It escalates gently, from a nudge to a conversation to a lock, and it remembers your goals and patterns.
 
 - `daemon/`: the brain (Python). Sensors → event bus → rules → companion → actions → interfaces.
 - `ui/`: design tokens, overlay components and an interactive preview of every state.
