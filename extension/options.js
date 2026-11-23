@@ -1,7 +1,7 @@
 "use strict";
 const api = globalThis.browser ?? globalThis.chrome;
 const $ = (id) => document.getElementById(id);
-const ORIGINS = ["http://127.0.0.1/*", "*://*.youtube.com/*", "*://*.bilibili.com/*"];
+const ORIGINS = ["<all_urls>"];
 
 function show(text, kind = "") {
   const el = $("status");

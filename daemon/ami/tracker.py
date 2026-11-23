@@ -65,9 +65,9 @@ class Tracker:
         for bucket in (s.by_kind, d.by_kind):
             bucket[kind] = bucket.get(kind, 0.0) + dt
         for bucket in (s.by_site, d.by_site):
-            bucket[hb.site] = bucket.get(hb.site, 0.0) + dt
+            bucket[hb.place] = bucket.get(hb.place, 0.0) + dt
         s.last_active = now
         s.last_title = hb.title or s.last_title
-        s.last_site = hb.site
+        s.last_site = hb.place
         self.last_counted = now
         return dt

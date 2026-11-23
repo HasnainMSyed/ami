@@ -36,7 +36,7 @@ def session_note(s: Session, end: float, grants: list[dict]) -> str | None:
     minutes = s.raw_s / 60
     if minutes < 3:
         return None
-    sites = " and ".join(k.capitalize() for k, v in sorted(s.by_site.items(), key=lambda kv: -kv[1]) if v >= 30) or "video"
+    sites = " and ".join((k if "." in k else k.capitalize()) for k, v in sorted(s.by_site.items(), key=lambda kv: -kv[1]) if v >= 30) or "video"
     kind = max(s.by_kind.items(), key=lambda kv: kv[1])[0] if s.by_kind else "entertainment"
     parts = [f"{_fmt(s.start)}–{datetime.fromtimestamp(end):%H:%M}: {minutes:.0f} min on {sites}, mostly {KIND_WORDS.get(kind, kind)}"]
     if LEVEL_WORDS.get(s.max_level):

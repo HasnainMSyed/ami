@@ -18,7 +18,7 @@ class Thresholds:
     l1: float = 15.0
     l2: float = 25.0
     l3: float = 40.0
-    daily_budget: float = 90.0
+    daily_budget: float = 60.0
 
 
 @dataclass
@@ -76,6 +76,12 @@ class Config:
     policy_files: list[str] = field(default_factory=lambda: [
         "/etc/opt/chrome/policies/managed/ami.json",
         "/etc/firefox/policies/policies.json",
+    ])
+    # Video on these hosts (and their subdomains) never counts. The extension has the same
+    # built-in list; add your own here.
+    ignore_hosts: list[str] = field(default_factory=lambda: [
+        "q.utoronto.ca", "instructure.com", "play.library.utoronto.ca",
+        "meet.google.com", "zoom.us", "teams.microsoft.com", "teams.live.com", "discord.com",
     ])
     profile: str = "default"
     thresholds: Thresholds = field(default_factory=Thresholds)
@@ -157,3 +163,8 @@ def secret(name: str, env_file: str | None) -> str | None:
 def parse_hhmm(s: str) -> int:
     h, m = s.strip().split(":")
     return int(h) * 60 + int(m)
+
+
+def host_ignored(host: str, ignore: list[str]) -> bool:
+    host = (host or "").lower()
+    return bool(host) and any(host == h.lower() or host.endswith("." + h.lower()) for h in ignore if h)

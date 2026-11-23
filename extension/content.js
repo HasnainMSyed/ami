@@ -55,9 +55,15 @@
 
   // ---------- heartbeat ----------
   function beat() {
-    const page = globalThis.amiPage?.detectPage(location.href, document.title);
-    if (!page) return;
+    const amiPage = globalThis.amiPage;
+    if (!amiPage || amiPage.isIgnored(location.href)) return;
+    const page = amiPage.detectPage(location.href, document.title);
     const visible = document.visibilityState === "visible";
+    if (!page) {
+      // Any other site: the background knows whether a video is playing in some frame of this tab.
+      send({ type: "heartbeat", generic: { title: document.title, visible } }).then(apply);
+      return;
+    }
     const playing = isPlaying();
     const recent = document.hasFocus() && Date.now() - lastInput < RECENT_INPUT_MS;
     const active = !blocking() && visible && (playing || recent);
@@ -71,11 +77,16 @@
   addEventListener("focus", scheduleBeat);
   addEventListener("popstate", scheduleBeat);
   document.addEventListener("yt-navigate-finish", scheduleBeat);
-  api.runtime.onMessage.addListener((msg) => { if (msg?.type === "state") apply(msg.state); });
+  api.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === "state") apply(msg.state);
+    else if (msg?.type === "beat") scheduleBeat();
+  });
 
   // ---------- host + styles ----------
+  let fontsLoaded = false;
   async function ensureHost() {
     if (host?.isConnected) return;
+    if (!fontsLoaded) { fontsLoaded = true; loadFonts(); } // only on pages where ami actually shows up
     host = document.createElement("ami-companion");
     host.style.cssText = "all:initial;position:fixed;inset:0;z-index:2147483647;pointer-events:none;";
     const shadow = host.attachShadow({ mode: "closed" });
@@ -284,7 +295,6 @@
   }
 
   // ---------- start ----------
-  loadFonts();
   const start = () => setTimeout(beat, 1200);
   if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", start, { once: true });
   else start();

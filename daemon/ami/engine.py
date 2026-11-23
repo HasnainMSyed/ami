@@ -11,7 +11,7 @@ from .brain.companion import Reply, RuleCompanion
 from .brain.memory import Memory
 from .bus import Bus
 from .sensors.watchdog import Watchdog
-from .config import Config
+from .config import Config, host_ignored
 from .rules.doomscroll import Decision, evaluate
 from .sensors.browser import Heartbeat
 from .state import Day, Session
@@ -30,6 +30,7 @@ def _hhmm(ts: float) -> str:
 
 
 GRANT_CAP = {0: 15, 1: 15, 2: 15, 3: 10, 4: 10}
+VIDEO_SITES = ("youtube", "bilibili")  # where the morning goals card may appear
 TAMPER_KINDS = ("unmanaged_app", "extension_silent", "policy_changed")
 BROWSER_NAMES = {"chrome": "Chrome", "firefox": "Firefox"}
 
@@ -86,13 +87,15 @@ class Engine:
     # sensor input
     def heartbeat(self, hb: Heartbeat) -> dict:
         now = self.clock()
+        if hb.site == "web" and host_ignored(hb.host, self.cfg.ignore_hosts):
+            return self._payload(Decision(0, "ignored"), now, False, hb)
         kind = self.classifier.kind_for(hb)
         had_session = self.tracker.session is not None
         self.tracker.ingest(hb, kind, now)
         self._save_ended()
         if hb.active and not had_session and self.tracker.session:
             self.bus.publish("session_started", {"site": hb.site, "title": hb.title})
-        return self._decide(now, hb.active)
+        return self._decide(now, hb.active, hb)
 
     def tick(self) -> None:
         """Called periodically: ends stale sessions, rolls the day, runs the watchdog."""
@@ -139,7 +142,7 @@ class Engine:
             self.desktop.speak("Someone changed ami's browser settings.")
 
     # decisions
-    def _decide(self, now: float, active: bool) -> dict:
+    def _decide(self, now: float, active: bool, hb: Heartbeat | None = None) -> dict:
         day, session = self.tracker.day, self.tracker.session
         d = evaluate(day, session, now, self.cfg, active)
         for kind, payload in d.events:
@@ -150,7 +153,7 @@ class Engine:
         if session:
             session.max_level = max(session.max_level, d.level)
         self._persist()
-        return self._payload(d, now, active)
+        return self._payload(d, now, active, hb)
 
     def _on_level_change(self, old: int, d: Decision, now: float) -> None:
         self._openings.pop(d.level, None)
@@ -220,7 +223,7 @@ class Engine:
             self._openings[level] = self.fallback.opening(level, ctx)
         return self._openings[level]
 
-    def _payload(self, d: Decision, now: float, active: bool) -> dict:
+    def _payload(self, d: Decision, now: float, active: bool, hb: Heartbeat | None = None) -> dict:
         day, s = self.tracker.day, self.tracker.session
         ctx = self.context(now, d)
         if d.level == 4:
@@ -231,7 +234,7 @@ class Engine:
                   "unlock_min": self.cfg.l3_unlock_min, "reason": d.reason, "opening": self._opening(3, ctx)}
         elif d.level == 2:
             ui = {"kind": "checkin", "opening": self._opening(2, ctx)}
-        elif active and not day.goals_prompted:
+        elif active and not day.goals_prompted and hb is not None and hb.site in VIDEO_SITES:
             ui = {"kind": "goals", "budget_options": self.cfg.budget_options,
                   "default_budget": int(self.cfg.thresholds.daily_budget)}
         elif d.level == 1 and s and not s.l1_dismissed:

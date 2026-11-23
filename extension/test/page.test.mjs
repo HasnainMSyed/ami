@@ -41,3 +41,27 @@ test("titles are trimmed and capped", () => {
   assert.equal(cleanTitle("youtube", "  a - YouTube "), "a");
   assert.equal(cleanTitle("youtube", "x".repeat(400)).length, 300);
 });
+
+test("google Videos tab is a feed; ordinary searches are not tracked", () => {
+  assert.equal(detectPage("https://www.google.com/search?q=entropy&udm=7", "entropy - Google Search").site, "google");
+  assert.equal(detectPage("https://www.google.ca/search?q=x&tbm=vid", "x").page_type, "search");
+  assert.equal(detectPage("https://www.google.com/search?q=entropy", "x"), null);
+});
+
+test("youtube embeds are watch pages with an id", () => {
+  const { embedVideoId } = require("../lib/page.js");
+  assert.equal(detectPage("https://www.youtube.com/embed/BmlB8y5Sig8", "x").video_id, "BmlB8y5Sig8");
+  assert.equal(embedVideoId("https://www.youtube-nocookie.com/embed/BmlB8y5Sig8?autoplay=1"), "BmlB8y5Sig8");
+  assert.equal(embedVideoId("https://michael.team/yt/?v=BmlB8y5Sig8"), null);
+});
+
+test("coursework and calls never count", () => {
+  const { isIgnored } = require("../lib/page.js");
+  assert.ok(isIgnored("https://q.utoronto.ca/courses/1/pages/x"));
+  assert.ok(isIgnored("https://play.library.utoronto.ca/watch/abc"));
+  assert.ok(isIgnored("https://utoronto.instructure.com/x"));
+  assert.ok(isIgnored("https://meet.google.com/abc-defg-hij"));
+  assert.ok(!isIgnored("https://michael.team/yt/"));
+  assert.ok(!isIgnored("https://www.google.com/search?q=x&udm=7"));
+  assert.ok(isIgnored("https://example.org/", ["example.org"]));
+});
