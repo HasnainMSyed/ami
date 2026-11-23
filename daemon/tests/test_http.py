@@ -62,3 +62,25 @@ async def test_goals_and_chat(client):
     assert (await r.json())["stats"]["budget_min"] == 45
     r = await client.post("/chat", json={"text": "hello"}, headers=H)
     assert "reply" in await r.json()
+
+
+async def test_later_routes(client):
+    r = await client.post("/later", json={"url": "https://www.youtube.com/watch?v=x", "title": "X", "site": "youtube",
+                                          "video_id": "x"}, headers=H)
+    assert r.status == 200
+    item = (await r.json())["id"]
+    got = await (await client.get("/later", headers=H)).json()
+    assert got["window"] == "21:00-22:00" and got["items"][0]["title"] == "X"
+    assert (await client.post("/later", json={"url": "javascript:alert(1)"}, headers=H)).status == 400
+    assert (await client.delete(f"/later/{item}", headers=H)).status == 200
+    assert (await client.delete(f"/later/{item}", headers=H)).status == 404
+    assert (await client.get("/later")).status == 401
+
+
+async def test_intent_and_urge_routes(client):
+    assert (await client.post("/intent", json={"text": "x"}, headers=H)).status == 409   # no session yet
+    await client.post("/heartbeat", json=BEAT, headers=H)
+    r = await client.post("/intent", json={"text": "one lecture", "minutes": 30}, headers=H)
+    assert r.status == 200
+    assert (await client.post("/intent", json={"minutes": "lots"}, headers=H)).status == 400
+    assert (await client.post("/urge", json={"feeling": "tired", "choice": "walk", "completed": True}, headers=H)).status == 200

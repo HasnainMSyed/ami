@@ -47,7 +47,9 @@ def quiet_end(now: float, spec: str) -> float:
     return end_today.timestamp()
 
 
-def evaluate(day: Day, session: Session | None, now: float, cfg: Config, active: bool) -> Decision:
+def evaluate(day: Day, session: Session | None, now: float, cfg: Config, active: bool,
+             defer: bool = False) -> Decision:
+    """`defer`: a video that's nearly over is playing, so a new check-in or block waits for its end."""
     t = cfg.thresholds
     events: list[tuple[str, dict]] = []
     s_min = session.weighted_min if session else 0.0
@@ -77,6 +79,8 @@ def evaluate(day: Day, session: Session | None, now: float, cfg: Config, active:
     if over_l3:
         if day.unlock_until > now:
             return Decision(0, "unlocked", events=events)
+        if day.l3_since is None and defer and day.level < 2:
+            return Decision(1, "finishing", events=events)
         if day.l3_since is None:
             if day.l3_count >= 1:
                 # Second time over the line today: lock instead of another cooldown.
@@ -91,6 +95,8 @@ def evaluate(day: Day, session: Session | None, now: float, cfg: Config, active:
         return Decision(3, reason, unlock_at=day.l3_since + cfg.l3_cooldown_s, events=events)
 
     if s_min >= t.l2:
+        if defer and day.level < 2:
+            return Decision(1, "finishing", events=events)
         return Decision(2, "session", events=events)
     if s_min >= t.l1:
         return Decision(1, "session", events=events)

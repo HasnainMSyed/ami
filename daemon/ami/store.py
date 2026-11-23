@@ -16,6 +16,8 @@ CREATE TABLE IF NOT EXISTS chats   (id INTEGER PRIMARY KEY, ts REAL, role TEXT, 
 CREATE TABLE IF NOT EXISTS goals   (day TEXT PRIMARY KEY, goal TEXT, budget_min REAL, ts REAL);
 CREATE TABLE IF NOT EXISTS notes   (id INTEGER PRIMARY KEY, ts REAL, text TEXT);
 CREATE TABLE IF NOT EXISTS kv      (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS intents (id INTEGER PRIMARY KEY, ts REAL, session_id TEXT, text TEXT, minutes REAL, one_video INTEGER);
+CREATE TABLE IF NOT EXISTS later   (id INTEGER PRIMARY KEY, ts REAL, site TEXT, video_id TEXT, url TEXT, title TEXT, opened REAL);
 """
 
 
@@ -102,6 +104,52 @@ class Store:
 
     def notes_since(self, ts: float) -> list[dict]:
         return [dict(r) for r in self.db.execute("SELECT ts, text FROM notes WHERE ts >= ? ORDER BY ts", (ts,))]
+
+    # session intents
+    def add_intent(self, ts: float, session_id: str, text: str, minutes: float | None, one_video: bool) -> None:
+        self.db.execute("INSERT INTO intents(ts, session_id, text, minutes, one_video) VALUES (?,?,?,?,?)",
+                        (ts, session_id, text, minutes, int(one_video)))
+        self.db.commit()
+
+    def intents_since(self, ts: float) -> list[dict]:
+        return [dict(r) for r in self.db.execute("SELECT * FROM intents WHERE ts >= ? ORDER BY ts", (ts,))]
+
+    # the later list
+    def add_later(self, ts: float, site: str, video_id: str | None, url: str, title: str) -> int:
+        if video_id:
+            r = self.db.execute("SELECT id FROM later WHERE video_id = ? AND opened IS NULL", (video_id,)).fetchone()
+            if r:
+                return int(r["id"])
+        cur = self.db.execute("INSERT INTO later(ts, site, video_id, url, title) VALUES (?,?,?,?,?)",
+                              (ts, site, video_id, url, title))
+        self.db.commit()
+        return int(cur.lastrowid)
+
+    def list_later(self, since: float, include_opened: bool = True) -> list[dict]:
+        q = "SELECT * FROM later WHERE ts >= ?" + ("" if include_opened else " AND opened IS NULL") + " ORDER BY ts"
+        return [dict(r) for r in self.db.execute(q, (since,))]
+
+    def find_later(self, since: float, video_id: str | None, url: str) -> dict | None:
+        if video_id:
+            r = self.db.execute("SELECT * FROM later WHERE ts >= ? AND video_id = ? ORDER BY ts DESC", (since, video_id)).fetchone()
+        elif url:
+            r = self.db.execute("SELECT * FROM later WHERE ts >= ? AND url = ? ORDER BY ts DESC", (since, url)).fetchone()
+        else:
+            r = None
+        return dict(r) if r else None
+
+    def open_later(self, item_id: int, ts: float) -> None:
+        self.db.execute("UPDATE later SET opened = ? WHERE id = ? AND opened IS NULL", (ts, item_id))
+        self.db.commit()
+
+    def delete_later(self, item_id: int) -> bool:
+        n = self.db.execute("DELETE FROM later WHERE id = ?", (item_id,)).rowcount
+        self.db.commit()
+        return n > 0
+
+    def prune_later(self, before: float) -> None:
+        self.db.execute("DELETE FROM later WHERE ts < ?", (before,))
+        self.db.commit()
 
     # key/value state
     def put_kv(self, key: str, value) -> None:

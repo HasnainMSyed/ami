@@ -12,6 +12,7 @@ let lastLevel = 0;
 // ---------- video in any frame of any tab (reported by sensor.js) ----------
 const frames = new Map(); // tabId -> Map(frameId -> report)
 const tabLevels = new Map();
+const tabReasons = new Map(); // "finishing": ami is waiting for this tab's video to end
 
 function noteFrame(msg, sender) {
   const tab = sender?.tab?.id;
@@ -31,7 +32,7 @@ function playingFrame(tab) {
   return null;
 }
 
-api.tabs.onRemoved.addListener((tab) => { frames.delete(tab); tabLevels.delete(tab); });
+api.tabs.onRemoved.addListener((tab) => { frames.delete(tab); tabLevels.delete(tab); tabReasons.delete(tab); });
 
 // A heartbeat for a site ami doesn't know: only sent while a real video plays somewhere in the tab.
 function genericHeartbeat(msg, sender) {
@@ -39,7 +40,7 @@ function genericHeartbeat(msg, sender) {
   const f = playingFrame(tab);
   // Nothing playing: stay silent, unless ami is already blocking this tab (it paused the video
   // itself), so the overlay and the pause hold instead of vanishing with the video.
-  if (!f && (tabLevels.get(tab) ?? 0) < 2) return null;
+  if (!f && (tabLevels.get(tab) ?? 0) < 2 && tabReasons.get(tab) !== "finishing") return null;
   const url = sender.tab.url || "";
   return {
     site: "web",
@@ -59,6 +60,7 @@ function toFrames(tab, state) {
   if (tab === undefined || !state || state.error || state.scope === "chess") return;
   const prev = tabLevels.get(tab) ?? 0;
   tabLevels.set(tab, state.level ?? 0);
+  tabReasons.set(tab, state.reason || "");
   if ((state.level ?? 0) >= 2 || prev >= 2) api.tabs.sendMessage(tab, { type: "state", state }).catch(() => {});
 }
 
@@ -72,15 +74,15 @@ async function settings() {
 
 class NotConnected extends Error {}
 
-async function call(path, body) {
+async function call(path, body, method) {
   const s = await settings();
   if (!s.token) throw new NotConnected("no token");
   let r;
   try {
     r = await fetch(s.daemonUrl.replace(/\/$/, "") + path, {
-      method: body === undefined ? "GET" : "POST",
+      method: method || (body === undefined ? "GET" : "POST"),
       headers: { "Content-Type": "application/json", "X-Ami-Token": s.token },
-      body: body === undefined ? undefined : JSON.stringify(body),
+      body: body === undefined || body === null ? undefined : JSON.stringify(body),
     });
   } catch {
     throw new NotConnected("daemon unreachable");
@@ -178,6 +180,25 @@ async function handle(msg, sender) {
       }
       case "status":
         return await call("/status");
+      case "intent":
+        return await call("/intent", { text: msg.text, minutes: msg.minutes ?? null, one_video: Boolean(msg.one_video) });
+      case "later_add": {
+        // On other sites the video id comes from the embedded player, so a saved video matches anywhere.
+        let videoId = msg.video_id || null;
+        if (!videoId) for (const f of frames.get(tab)?.values() ?? []) if (f.embed_id) videoId = f.embed_id;
+        return await call("/later", { url: msg.url, title: msg.title, site: msg.site, video_id: videoId });
+      }
+      case "later_list":
+        return await call("/later");
+      case "later_del":
+        return await call(`/later/${Number(msg.id)}`, null, "DELETE");
+      case "urge":
+        return await call("/urge", { feeling: msg.feeling, choice: msg.choice, completed: Boolean(msg.completed) });
+      case "summary":
+        return await call(`/summary?scope=${encodeURIComponent(msg.scope || "today")}&offset=${Number(msg.offset) || 0}`);
+      case "open":
+        if (/^https?:\/\//.test(msg.url || "")) await api.tabs.create({ url: msg.url });
+        return { ok: true };
       case "settings":
         return await settings();
       case "openOptions":

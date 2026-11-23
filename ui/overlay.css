@@ -179,3 +179,30 @@
 @media (prefers-reduced-motion: reduce) {
   .ami-root *, .ami-root *::before, .ami-root *::after { animation: none !important; transition: none !important; }
 }
+
+/* Stack: chat sheet + extras under it (check-in) */
+.ami-root .ami-stack { display: flex; flex-direction: column; align-items: center; gap: 12px; width: min(460px, 100%); }
+.ami-root .ami-stack > .ami-sheet { width: 100%; }
+
+/* Ride it out */
+.ami-root .ami-urge { width: 100%; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.ami-root .ami-urge-card { width: min(460px, 100%); text-align: left; gap: 12px; align-items: stretch; }
+.ami-root .ami-urge-card .ami-ring { align-self: center; }
+.ami-root .ami-urge-card .ami-ring .track { stroke: var(--ami-field); }
+.ami-root .ami-urge-card .ami-ring span { color: var(--ami-fg); }
+.ami-root .ami-urge-card .ami-text { color: var(--ami-muted); opacity: 1; max-width: none; }
+.ami-root .ami-block .ami-urge > .ami-text { color: #f4f6f7; }
+
+/* Toast with a form (intent) */
+.ami-root .ami-toast form.ami-body .ami-field { width: 100%; }
+
+/* Saved-for-later list */
+.ami-root .ami-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 210px; overflow: auto; }
+.ami-root .ami-link {
+  all: unset; box-sizing: border-box; width: 100%; cursor: pointer; padding: 8px 10px; border-radius: 10px;
+  font: 500 13px/1.35 var(--ami-font); color: var(--ami-fg); background: var(--ami-field);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ami-root .ami-link:hover { color: var(--ami-accent); }
+.ami-root .ami-link:focus-visible { outline: 2px solid var(--ami-accent); outline-offset: 2px; }
+.ami-root [hidden] { display: none !important; }

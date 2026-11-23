@@ -13,7 +13,7 @@ from .bus import Bus
 from .sensors.watchdog import Watchdog
 from .config import Config, host_ignored
 from .rules.chess import ChessDecision, evaluate_chess, exempt, next_day_start, see_game
-from .rules.doomscroll import Decision, evaluate
+from .rules.doomscroll import Decision, evaluate, in_quiet
 from .sensors.browser import Heartbeat
 from .sensors.chess import ChessHistory, Game
 from .state import Day, Session
@@ -33,6 +33,8 @@ def _hhmm(ts: float) -> str:
 
 GRANT_CAP = {0: 15, 1: 15, 2: 15, 3: 10, 4: 10}
 VIDEO_SITES = ("youtube", "bilibili")  # where the morning goals card may appear
+WATCH_SITES = ("youtube", "bilibili", "web")  # where a session intent may be asked
+FEELINGS = ("bored", "tired", "avoiding", "stressed", "lonely", "other")
 TAMPER_KINDS = ("unmanaged_app", "extension_silent", "policy_changed")
 BROWSER_NAMES = {"chrome": "Chrome", "firefox": "Firefox"}
 
@@ -58,6 +60,7 @@ class Engine:
         if self.chess and (saved := store.get_kv("chess_games")):
             self.chess.load(saved)
         self._chess_beat = 0.0
+        self._last_kind = ""
         self.tracker = Tracker(cfg, *self._restore())
         self.tracker.roll(clock())
         self._save_ended()
@@ -98,6 +101,7 @@ class Engine:
         if hb.site == "web" and host_ignored(hb.host, self.cfg.ignore_hosts):
             return self._payload(Decision(0, "ignored"), now, False, hb)
         kind = self.classifier.kind_for(hb)
+        self._last_kind = kind
         had_session = self.tracker.session is not None
         self.tracker.ingest(hb, kind, now)
         self._save_ended()
@@ -115,6 +119,7 @@ class Engine:
         if self.watchdog:
             for kind, payload in self.watchdog.check(now):
                 self._on_watchdog(kind, payload, now)
+        self._later_tick(now)
         if self.chess:
             recent = now - self._chess_beat < 120
             every = self.cfg.chess.poll_active_s if recent else self.cfg.chess.poll_idle_s
@@ -210,9 +215,32 @@ class Engine:
                 "locked": d.locked, "reason": d.reason, "until": d.until or None}
 
     # decisions
+    def _defer_key(self, hb: Heartbeat | None) -> str:
+        return (hb.video_id or hb.title or "") if hb else ""
+
+    def _can_defer(self, hb: Heartbeat | None, now: float) -> bool:
+        """A nearly finished video may finish before a check-in, once per video, for at most that long."""
+        day = self.tracker.day
+        if not hb or not hb.playing or not hb.active or hb.remaining_s is None or day.level >= 2:
+            return False
+        limit = self.cfg.finish_video_max_min * 60
+        key = self._defer_key(hb)
+        if day.defer_video:
+            return day.defer_video == key and now - day.defer_since < limit + 60
+        return bool(key) and hb.remaining_s <= limit
+
     def _decide(self, now: float, active: bool, hb: Heartbeat | None = None) -> dict:
         day, session = self.tracker.day, self.tracker.session
-        d = evaluate(day, session, now, self.cfg, active)
+        later = self._later_match(hb, now)
+        if later:
+            d = Decision(0, "later")
+        else:
+            d = evaluate(day, session, now, self.cfg, active, defer=self._can_defer(hb, now))
+        if d.reason == "finishing" and not day.defer_video:
+            day.defer_video, day.defer_since = self._defer_key(hb), now
+            self.bus.publish("finishing", {"title": hb.title if hb else "", "remaining_s": hb.remaining_s if hb else None})
+        elif d.level >= 2 and day.defer_video:
+            day.defer_video, day.defer_since = "", 0.0
         for kind, payload in d.events:
             self.bus.publish(kind, payload)
         if d.level != day.level:
@@ -285,6 +313,7 @@ class Engine:
             "site": s.last_site if s else "",
             "title": s.last_title if s else "",
             "chess_games": len(day.chess_ids),
+            "intent": self._intent_words(s) if s else "",
         }
 
     def _opening(self, level: int, ctx: dict) -> str:
@@ -306,6 +335,17 @@ class Engine:
         elif active and not day.goals_prompted and hb is not None and hb.site in VIDEO_SITES:
             ui = {"kind": "goals", "budget_options": self.cfg.budget_options,
                   "default_budget": int(self.cfg.thresholds.daily_budget)}
+        elif d.reason == "finishing" and hb is not None:
+            ui = {"kind": "finishing", "remaining_min": round((hb.remaining_s or 0) / 60)}
+        elif d.reason == "later":
+            ui = {"kind": "none"}
+        elif (later_ui := self._later_ui(hb, d, now)) is not None:
+            ui = later_ui
+        elif (due := self._intent_due(hb, s, now)) is not None:
+            ui = due
+        elif (self.cfg.ask_intent and active and hb is not None and hb.site in WATCH_SITES and hb.page_type == "watch"
+              and s and not s.intent_asked and self._last_kind != "learning"):
+            ui = {"kind": "intent"}
         elif d.level == 1 and s and not s.l1_dismissed:
             ui = {"kind": "toast", "title": f"{ctx['session_min']:.0f} minutes in",
                   "body": (f"Your goal today: {ctx['goal']}." if ctx["goal"] else "Worth checking what you came here for."),
@@ -328,6 +368,101 @@ class Engine:
             "heartbeat_s": self.cfg.heartbeat_s,
         }
 
+    # session intent
+    @staticmethod
+    def _intent_words(s: Session) -> str:
+        if not s.intent_asked or not (s.intent_text or s.intent_until or s.intent_video):
+            return ""
+        plan = "one video" if s.intent_video else f"until {_hhmm(s.intent_until)}" if s.intent_until else ""
+        return " · ".join(x for x in (s.intent_text, plan) if x)
+
+    def set_intent(self, text: str, minutes: float | None, one_video: bool) -> dict:
+        now = self.clock()
+        s = self.tracker.session
+        if s is None:
+            raise ActionError("no session")
+        s.intent_asked = True
+        s.intent_text = text.strip()[:200]
+        s.intent_until = now + max(1.0, min(float(minutes), 240.0)) * 60 if minutes else 0.0
+        s.intent_video = (s.last_video or s.last_title) if one_video else ""
+        self.store.add_intent(now, s.id, s.intent_text, minutes, one_video)
+        self.bus.publish("intent", {"text": s.intent_text, "minutes": minutes, "one_video": one_video})
+        return self._decide(now, False)
+
+    def _intent_due(self, hb: Heartbeat | None, s: Session | None, now: float) -> dict | None:
+        if not s or not hb or s.intent_noted or not s.intent_asked or self.tracker.day.level >= 2:
+            return None
+        current = hb.video_id or hb.title
+        if s.intent_video and hb.page_type == "watch" and current and current != s.intent_video:
+            return {"kind": "intent_due", "text": s.intent_text, "plan": "one video"}
+        if s.intent_until and now >= s.intent_until:
+            return {"kind": "intent_due", "text": s.intent_text, "plan": f"until {_hhmm(s.intent_until)}"}
+        return None
+
+    # the later list
+    def _later_since(self, now: float) -> float:
+        return now - self.cfg.later_days * 86400
+
+    def in_later_window(self, now: float) -> bool:
+        return bool(self.cfg.later_window) and in_quiet(now, self.cfg.later_window)
+
+    def _later_match(self, hb: Heartbeat | None, now: float) -> dict | None:
+        if not hb or hb.page_type != "watch" or not self.in_later_window(now):
+            return None
+        item = self.store.find_later(self._later_since(now), hb.video_id, hb.url)
+        if item and not item["opened"]:
+            self.store.open_later(item["id"], now)
+            self.bus.publish("later_opened", {"title": item["title"]})
+        return item
+
+    def _later_ui(self, hb: Heartbeat | None, d: Decision, now: float) -> dict | None:
+        day = self.tracker.day
+        if (not hb or hb.site not in VIDEO_SITES or d.level >= 2 or day.later_dismissed
+                or not self.in_later_window(now)):
+            return None
+        items = self.store.list_later(self._later_since(now), include_opened=False)
+        if not items:
+            return None
+        end = self.cfg.later_window.split("-")[1]
+        return {"kind": "later", "until": end,
+                "items": [{"id": i["id"], "title": i["title"], "url": i["url"]} for i in items[:8]]}
+
+    def _later_tick(self, now: float) -> None:
+        day = self.tracker.day
+        if self.in_later_window(now) and not day.later_notified:
+            items = self.store.list_later(self._later_since(now), include_opened=False)
+            if items:
+                day.later_notified = True
+                end = self.cfg.later_window.split("-")[1]
+                self.desktop.notify("Your saved videos are open", f"{len(items)} waiting, until {end}.")
+
+    def save_later(self, url: str, title: str, site: str, video_id: str | None) -> dict:
+        now = self.clock()
+        url = url.strip()[:2000]
+        if not url.startswith(("https://", "http://")):
+            raise ActionError("url must be http(s)")
+        item_id = self.store.add_later(now, site[:20], (video_id or None) and video_id[:64], url, title.strip()[:300])
+        self.bus.publish("later_saved", {"title": title[:300]})
+        return {"id": item_id, "window": self.cfg.later_window, "items": self.later()}
+
+    def later(self) -> list[dict]:
+        now = self.clock()
+        self.store.prune_later(self._later_since(now))
+        return [{"id": i["id"], "title": i["title"], "url": i["url"], "site": i["site"], "saved": i["ts"],
+                 "opened": i["opened"]} for i in self.store.list_later(self._later_since(now))]
+
+    def delete_later(self, item_id: int) -> dict:
+        if not self.store.delete_later(item_id):
+            raise ActionError("no such item")
+        return {"items": self.later()}
+
+    # urges
+    def urge(self, feeling: str, choice: str, completed: bool) -> dict:
+        feeling = feeling if feeling in FEELINGS else "other"
+        self.bus.publish("urge", {"feeling": feeling, "choice": choice.strip()[:80], "completed": bool(completed),
+                                  "level": self.tracker.day.level})
+        return {"ok": True}
+
     # user actions
     def ack(self, action: str) -> dict:
         now = self.clock()
@@ -337,10 +472,19 @@ class Engine:
                 s.l1_dismissed = True
         elif action == "skip_goals":
             day.goals_prompted = True
+        elif action == "skip_intent":
+            if s:
+                s.intent_asked = True
+        elif action == "dismiss_intent":
+            if s:
+                s.intent_noted = True
+        elif action == "dismiss_later":
+            day.later_dismissed = True
         elif action == "stop":
             self.bus.publish("stopped", {"level": day.level, "session_min": round(s.weighted_min, 1) if s else 0})
             if s:
                 s.l1_dismissed = True
+                s.intent_noted = True
         elif action == "unlock":
             if day.level != 3 or day.l3_since is None:
                 raise ActionError("nothing to unlock")

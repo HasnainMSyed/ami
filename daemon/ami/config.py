@@ -87,6 +87,10 @@ class Config:
         "/etc/opt/chrome/policies/managed/ami.json",
         "/etc/firefox/policies/policies.json",
     ])
+    later_window: str = "21:00-22:00"  # videos saved for later can be watched in this window
+    later_days: int = 7                # saved videos expire after this many days
+    finish_video_max_min: float = 10.0  # let a video finish before a check-in if this much or less is left
+    ask_intent: bool = True            # "what are you here to watch?" at the start of a session
     # Video on these hosts (and their subdomains) never counts. The extension has the same
     # built-in list; add your own here.
     ignore_hosts: list[str] = field(default_factory=lambda: [

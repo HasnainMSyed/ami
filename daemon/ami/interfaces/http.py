@@ -80,6 +80,39 @@ def make_app(engine: Engine, token: str, ext_dir: str | Path | None = None) -> w
     async def status(_):
         return web.json_response(engine.status())
 
+    async def intent(request):
+        data = await body(request)
+        minutes = data.get("minutes")
+        if minutes is not None and not isinstance(minutes, (int, float)):
+            return _err(400, "minutes must be a number")
+        try:
+            return web.json_response(engine.set_intent(str(data.get("text", "")), minutes, bool(data.get("one_video"))))
+        except ActionError as e:
+            return _err(409, str(e))
+
+    async def get_later(_):
+        return web.json_response({"items": engine.later(), "window": engine.cfg.later_window})
+
+    async def add_later(request):
+        data = await body(request)
+        vid = data.get("video_id")
+        try:
+            return web.json_response(engine.save_later(str(data.get("url", "")), str(data.get("title", "")),
+                                                       str(data.get("site", "")), str(vid) if vid else None))
+        except ActionError as e:
+            return _err(400, str(e))
+
+    async def del_later(request):
+        try:
+            return web.json_response(engine.delete_later(int(request.match_info["id"])))
+        except (ActionError, ValueError) as e:
+            return _err(404, str(e))
+
+    async def urge(request):
+        data = await body(request)
+        return web.json_response(engine.urge(str(data.get("feeling", "")), str(data.get("choice", "")),
+                                             bool(data.get("completed"))))
+
     async def ext_file(request):
         name = request.match_info["name"]
         path = Path(ext_dir) / name if ext_dir and name in EXT_FILES else None
@@ -119,6 +152,11 @@ def make_app(engine: Engine, token: str, ext_dir: str | Path | None = None) -> w
         web.get("/goals", get_goals),
         web.post("/goals", set_goals),
         web.get("/status", status),
+        web.post("/intent", intent),
+        web.get("/later", get_later),
+        web.post("/later", add_later),
+        web.delete("/later/{id}", del_later),
+        web.post("/urge", urge),
         web.post("/ping", ping),
         web.get("/ext/{name}", ext_file),
         web.get("/events", events),

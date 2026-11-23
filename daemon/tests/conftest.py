@@ -44,6 +44,7 @@ def cfg() -> Config:
     c = apply_profile(Config(), "debug")  # l1=1 l2=2 l3=3 budget=6 cooldown=10s unlock=1m lock=2m
     c.quiet_hours = ""
     c.watchdog = False  # tests inject their own Watchdog with a fake process list
+    c.ask_intent = False  # tests that need the intent card turn it on
     return c
 
 

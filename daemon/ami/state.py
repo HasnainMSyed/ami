@@ -17,6 +17,12 @@ class Session:
     l1_dismissed: bool = False
     last_title: str = ""
     last_site: str = ""
+    last_video: str = ""
+    intent_asked: bool = False
+    intent_text: str = ""
+    intent_until: float = 0.0      # "until HH:MM"
+    intent_video: str = ""         # "one video": the video it was
+    intent_noted: bool = False     # the "you said ..." reminder was shown and dismissed
 
     @property
     def weighted_min(self) -> float:
@@ -51,6 +57,10 @@ class Day:
     chess_ids: list[str] = field(default_factory=list)          # today's games, in the order they started
     chess_seen: dict[str, float] = field(default_factory=dict)  # game id -> when ami first saw it
     chess_lock: str = ""                                        # reason of the current chess lock
+    defer_video: str = ""           # the video ami is letting finish before it checks in
+    defer_since: float = 0.0
+    later_notified: bool = False
+    later_dismissed: bool = False
 
     @property
     def weighted_min(self) -> float:

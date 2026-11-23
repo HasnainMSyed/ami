@@ -39,4 +39,22 @@ $("grant").addEventListener("click", async () => {
   const ok = await api.permissions.request({ origins: ORIGINS });
   $("grant").hidden = ok;
 });
+const DEFAULT_ALTERNATIVES = ["Walk around the block", "Glass of water", "Shower", "Music, eyes closed",
+  "Lie down for 10 minutes", "Text a friend"];
+
+async function loadPrefs() {
+  const { cutChain, alternatives } = await api.storage.local.get(["cutChain", "alternatives"]);
+  $("cutChain").checked = cutChain !== false;
+  $("alts").value = (Array.isArray(alternatives) && alternatives.length ? alternatives : DEFAULT_ALTERNATIVES).join("\n");
+}
+
+$("prefs").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const alternatives = $("alts").value.split("\n").map((x) => x.trim()).filter(Boolean).slice(0, 12);
+  await api.storage.local.set({ cutChain: $("cutChain").checked, alternatives });
+  $("prefsSaved").hidden = false;
+  setTimeout(() => { $("prefsSaved").hidden = true; }, 1500);
+});
+
 load();
+loadPrefs();

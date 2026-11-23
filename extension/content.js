@@ -53,11 +53,42 @@
   }
   function stopEnforcing() { clearInterval(enforceTimer); enforceTimer = null; }
 
+  // ---------- cut the chain: no autoplay, no end screens, no "up next" column ----------
+  const CHAIN_CSS = {
+    youtube: `#related, ytd-watch-next-secondary-results-renderer, .ytp-endscreen-content, .ytp-ce-element,
+      .ytp-autonav-endscreen-countdown-overlay, .ytp-autonav-endscreen-upnext-container, .videowall-endscreen,
+      .ytp-endscreen-previous, .ytp-endscreen-next, .ytp-suggested-action { display: none !important; }`,
+    bilibili: `.recommend-list-v1, .rec-list, .video-page-card-small, .recommend-list-container, #reco_list,
+      .bpx-player-ending-related, .bpx-player-ending-content, .bpx-player-ending-wrap { display: none !important; }`,
+  };
+  const AUTOPLAY_ON = {
+    youtube: '.ytp-autonav-toggle-button[aria-checked="true"]',
+    bilibili: ".continuous-btn .switch-btn.on, .auto-play .switch-btn.on",
+  };
+  let cutChainOn = true;
+  api.storage.local.get(["cutChain"]).then((v) => { cutChainOn = v.cutChain !== false; cutChain(); }).catch(() => {});
+  function cutChain() {
+    const site = globalThis.amiPage?.detectPage(location.href, "")?.site;
+    let style = document.getElementById("ami-cut-chain");
+    if (!cutChainOn || !CHAIN_CSS[site]) { style?.remove(); return; }
+    if (!style) {
+      style = document.createElement("style");
+      style.id = "ami-cut-chain";
+      style.textContent = CHAIN_CSS[site];
+      (document.head || document.documentElement).append(style);
+    }
+    const toggle = document.querySelector(AUTOPLAY_ON[site]);
+    if (toggle) toggle.click(); // the site remembers this, so it stays off
+  }
+  setInterval(() => { if (cutChainOn) cutChain(); }, 3000);
+
   // ---------- heartbeat ----------
+  let lastPage = null;
   function beat() {
     const amiPage = globalThis.amiPage;
     if (!amiPage || amiPage.isIgnored(location.href)) return;
     const page = amiPage.detectPage(location.href, document.title);
+    lastPage = page || { site: "web", page_type: "watch", video_id: null, title: document.title };
     const visible = document.visibilityState === "visible";
     if (!page) {
       // Any other site: the background knows whether a video is playing in some frame of this tab.
@@ -76,7 +107,7 @@
   document.addEventListener("visibilitychange", scheduleBeat);
   addEventListener("focus", scheduleBeat);
   addEventListener("popstate", scheduleBeat);
-  document.addEventListener("yt-navigate-finish", scheduleBeat);
+  document.addEventListener("yt-navigate-finish", () => { scheduleBeat(); cutChain(); });
   api.runtime.onMessage.addListener((msg) => {
     if (msg?.type === "state") apply(msg.state);
     else if (msg?.type === "beat") scheduleBeat();
@@ -133,6 +164,81 @@
       </div>`;
   }
 
+  const FEELINGS = [["bored", "Bored"], ["tired", "Tired"], ["avoiding", "Avoiding something"],
+    ["stressed", "Stressed"], ["lonely", "Lonely"], ["other", "Something else"]];
+  const DEFAULT_ALTERNATIVES = ["Walk around the block", "Glass of water", "Shower", "Music, eyes closed",
+    "Lie down for 10 minutes", "Text a friend"];
+  const URGE_S = 120;
+
+  function extras(onDark) {
+    const style = onDark ? ' style="background:rgba(255,255,255,.14);color:#f4f6f7"' : "";
+    const save = lastPage?.page_type === "watch"
+      ? `<button class="ami-btn ami-btn-ghost" data-act="save_later"${style}>Save for 21:00</button>` : "";
+    return `<div class="ami-urge" data-urge-area>
+      <div class="ami-row" style="justify-content:center">${save}
+        <button class="ami-btn ami-btn-ghost" data-act="urge"${style}>Ride it out · 2 min</button></div></div>`;
+  }
+
+  async function startUrge() {
+    const area = layer.querySelector("[data-urge-area]");
+    if (!area) return;
+    const { alternatives } = await api.storage.local.get(["alternatives"]).catch(() => ({}));
+    const alts = Array.isArray(alternatives) && alternatives.length ? alternatives : DEFAULT_ALTERNATIVES;
+    let feeling = "other";
+    let choice = "";
+    area.innerHTML = `<div class="ami-card ami-glass ami-urge-card">
+      <p class="ami-title">What's under the urge right now?</p>
+      <div class="ami-chips">${FEELINGS.map(([k, label]) => `<button type="button" class="ami-chip" data-feel="${k}">${label}</button>`).join("")}</div></div>`;
+    area.querySelectorAll("[data-feel]").forEach((b) => b.addEventListener("click", () => {
+      feeling = b.dataset.feel;
+      timer();
+    }));
+
+    function timer() {
+      const end = Date.now() + URGE_S * 1000;
+      area.innerHTML = `<div class="ami-card ami-glass ami-urge-card">
+        <p class="ami-title">Two minutes. Let it rise and pass.</p>
+        <p class="ami-text">An urge peaks and fades if you don't feed it. Breathe out slowly. Pick what you'll do after.</p>
+        <div class="ami-ring"><svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="38"/><circle class="prog" data-uprog cx="42" cy="42" r="38"/></svg><span data-uring>2:00</span></div>
+        <div class="ami-chips">${alts.map((a, i) => `<button type="button" class="ami-chip" data-alt="${i}" aria-pressed="false">${esc(a)}</button>`).join("")}</div>
+        <div class="ami-row" data-done hidden><button type="button" class="ami-btn ami-btn-primary" data-ok>I'm OK now</button>
+          <button type="button" class="ami-btn ami-btn-ghost" data-back>Still want to watch</button></div></div>`;
+      const chips = area.querySelectorAll("[data-alt]");
+      chips.forEach((c) => c.addEventListener("click", () => {
+        choice = alts[Number(c.dataset.alt)];
+        chips.forEach((o) => o.setAttribute("aria-pressed", String(o === c)));
+      }));
+      const prog = area.querySelector("[data-uprog]");
+      const txt = area.querySelector("[data-uring]");
+      const C = 2 * Math.PI * 38;
+      prog.style.strokeDasharray = String(C);
+      const t = setInterval(() => {
+        if (!area.isConnected) return clearInterval(t);
+        const left = Math.max(0, Math.ceil((end - Date.now()) / 1000));
+        prog.style.strokeDashoffset = String(C * (1 - left / URGE_S));
+        txt.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, "0")}`;
+        if (left <= 0) { clearInterval(t); area.querySelector("[data-done]").hidden = false; }
+      }, 250);
+      const finish = (completed) => {
+        send({ type: "urge", feeling, choice, completed });
+        area.innerHTML = completed
+          ? `<p class="ami-text" style="text-align:center">Good. ${choice ? `Go: ${esc(choice.toLowerCase())}.` : "Close the tab and go."}</p>`
+          : `<p class="ami-text" style="text-align:center">Fair. Tell ami above why it matters.</p>`;
+      };
+      area.querySelector("[data-ok]").addEventListener("click", () => finish(true));
+      area.querySelector("[data-back]").addEventListener("click", () => finish(false));
+    }
+  }
+
+  async function saveLater(btn) {
+    const p = lastPage || {};
+    const r = await send({ type: "later_add", url: location.href, title: p.title || document.title, site: p.site || "web", video_id: p.video_id || null });
+    if (btn) {
+      btn.disabled = true;
+      btn.textContent = r?.error ? "Couldn't save" : "Saved for 21:00 ✓";
+    }
+  }
+
   const views = {
     none: () => "",
     setup: () => `
@@ -171,7 +277,7 @@
       const chips = [`<span class="ami-stat">Today <b>${n(s.today_min)} / ${n(s.budget_min)}</b> min</span>`];
       if (s.shorts_min >= 1) chips.push(`<span class="ami-stat">Shorts <b>${n(s.shorts_min)}</b> min</span>`);
       if (s.goal) chips.push(`<span class="ami-stat">Goal <b>${esc(s.goal.slice(0, 40))}</b></span>`);
-      return `<div class="ami-scrim blur"></div><div class="ami-center">${chatSheet(ui.opening, `Paused your video · ${n(s.session_min)} min this session`, chips)}</div>`;
+      return `<div class="ami-scrim blur"></div><div class="ami-center"><div class="ami-stack">${chatSheet(ui.opening, `Paused your video · ${n(s.session_min)} min this session`, chips)}${extras(false)}</div></div>`;
     },
     away: (ui) => `
       <div class="ami-block" role="dialog" aria-label="Time to step away"><div class="ami-block-inner ami-enter">
@@ -182,6 +288,7 @@
         <div class="ami-ring" aria-label="Cooldown"><svg viewBox="0 0 84 84"><circle class="track" cx="42" cy="42" r="38"/><circle class="prog" data-prog cx="42" cy="42" r="38"/></svg><span data-ring>1:00</span></div>
         ${chatSheet(ui.opening, "After the countdown you can unlock once")}
         <button class="ami-btn ami-btn-ghost" data-act="unlock" disabled style="background:rgba(255,255,255,.14);color:#f4f6f7">Unlock ${n(ui.unlock_min)} min</button>
+        ${extras(true)}
       </div></div>`,
     locked: (ui) => `
       <div class="ami-block" role="dialog" aria-label="Locked"><div class="ami-block-inner ami-enter">
@@ -189,7 +296,46 @@
         <span class="ami-lock">${ICON_LOCK}Locked until ${esc(ui.lock_label)}</span>
         <h2 class="ami-display">${ui.offline ? "ami can't reach its service." : ui.reason === "quiet_hours" ? "It's late. You asked me to hold the line." : "You've had your break today."}</h2>
         ${chatSheet(ui.opening, ui.offline ? "Offline mode" : "Exceptions need a specific reason", null, !ui.offline)}
+        ${ui.offline ? "" : extras(true)}
       </div></div>`,
+    finishing: (ui) => `
+      <div class="ami-toast ami-glass ami-enter" role="status"><span class="ami-orb"></span>
+        <div class="ami-body">
+          <div><p class="ami-title">Finish this one</p>
+            <p class="ami-text">${n(ui.remaining_min) <= 1 ? "It's nearly over." : `About ${n(ui.remaining_min)} minutes left.`} When it ends, we'll talk. No next video.</p></div>
+          <div class="ami-row"><button class="ami-btn ami-btn-ghost" data-act="hide_note">OK</button></div>
+        </div></div>`,
+    intent: () => `
+      <div class="ami-toast ami-glass ami-enter" role="dialog" aria-label="What are you here for?"><span class="ami-orb"></span>
+        <form class="ami-body" data-intent>
+          <div><p class="ami-title">What are you here to watch?</p>
+            <p class="ami-text">Say it before the video decides for you.</p></div>
+          <input class="ami-field" data-input maxlength="200" autocomplete="off" placeholder="e.g. the new Veritasium video" aria-label="What you came for">
+          <div class="ami-chips" data-plan>
+            <button type="button" class="ami-chip" data-one="1" aria-pressed="true">One video</button>
+            <button type="button" class="ami-chip" data-min="20" aria-pressed="false">20 min</button>
+            <button type="button" class="ami-chip" data-min="45" aria-pressed="false">45 min</button></div>
+          <div class="ami-row"><button type="submit" class="ami-btn ami-btn-primary">That's the plan</button>
+            <button type="button" class="ami-btn ami-btn-ghost" data-act="skip_intent">Skip</button></div>
+        </form></div>`,
+    intent_due: (ui) => `
+      <div class="ami-toast ami-glass ami-enter" role="status"><span class="ami-orb"></span>
+        <div class="ami-body">
+          <div><p class="ami-title">${ui.plan === "one video" ? "That was the one video" : `You said ${esc(ui.plan)}`}</p>
+            <p class="ami-text">${ui.text ? `You came for: ${esc(ui.text)}. ` : ""}This is the natural place to stop.</p></div>
+          <div class="ami-row"><button class="ami-btn ami-btn-primary" data-act="stop">Stop here</button>
+            ${lastPage?.page_type === "watch" ? '<button class="ami-btn ami-btn-ghost" data-act="save_later">Save for later</button>' : ""}
+            <button class="ami-btn ami-btn-ghost" data-act="dismiss_intent">Keep going</button></div>
+        </div></div>`,
+    later: (ui) => `
+      <div class="ami-toast ami-glass ami-enter" role="status"><span class="ami-orb"></span>
+        <div class="ami-body">
+          <div><p class="ami-title">Your saved videos</p>
+            <p class="ami-text">These are open until ${esc(ui.until)}, even if today's budget is used.</p></div>
+          <ul class="ami-list">${(ui.items || []).map((i) =>
+            `<li><button type="button" class="ami-link" data-open="${esc(i.url)}">${esc(i.title || i.url)}</button></li>`).join("")}</ul>
+          <div class="ami-row"><button class="ami-btn ami-btn-ghost" data-act="dismiss_later">Not now</button></div>
+        </div></div>`,
     chess_locked: (ui) => {
       const head = ui.reason === "cap" ? `That's ${n(ui.games)} games today.`
         : ui.reason === "tilt" ? `${n(ui.streak)} losses in a row.`
@@ -222,7 +368,7 @@
     state = next;
     const ui = state.ui;
     const key = `${ui.kind}|${state.level}|${ui.lock_label || ui.until_label || ""}|${ui.offline ? 1 : 0}|${ui.games ?? ""}`;
-    if (ui.kind === "chess_note" && hiddenNote === key) return;
+    if ((ui.kind === "chess_note" || ui.kind === "finishing") && hiddenNote === key) return;
     if (blocking()) startEnforcing(); else stopEnforcing();
     if (key === renderedKey) return; // keep the chat thread as it is
     renderedKey = key;
@@ -235,7 +381,21 @@
   }
 
   function wire(ui) {
-    layer.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => act(b.dataset.act)));
+    layer.querySelectorAll("[data-act]").forEach((b) => b.addEventListener("click", () => act(b.dataset.act, b)));
+    layer.querySelectorAll("[data-open]").forEach((b) => b.addEventListener("click", () => { location.href = b.dataset.open; }));
+
+    const intent = layer.querySelector("[data-intent]");
+    if (intent) {
+      const chips = intent.querySelectorAll("[data-plan] .ami-chip");
+      chips.forEach((c) => c.addEventListener("click", () => chips.forEach((o) => o.setAttribute("aria-pressed", String(o === c)))));
+      intent.addEventListener("submit", async (e) => {
+        e.preventDefault();
+        const picked = intent.querySelector('[data-plan] [aria-pressed="true"]');
+        apply(await send({ type: "intent", text: intent.querySelector("[data-input]").value.trim(),
+          minutes: picked?.dataset.min ? Number(picked.dataset.min) : null, one_video: Boolean(picked?.dataset.one) }));
+      });
+      setTimeout(() => intent.querySelector("[data-input]")?.focus(), 50);
+    }
 
     const goals = layer.querySelector("[data-goals]");
     if (goals) {
@@ -313,9 +473,11 @@
   }
 
   let hiddenNote = "";
-  async function act(action) {
+  async function act(action, btn) {
     if (action === "options") return send({ type: "openOptions" });
     if (action === "hide_note") { hiddenNote = renderedKey; renderedKey = ""; if (layer) layer.innerHTML = ""; return; }
+    if (action === "save_later") return saveLater(btn);
+    if (action === "urge") return startUrge();
     if (action === "stop") pauseAll();
     const r = await send({ type: "ack", action });
     if (r && !r.error) apply(r);

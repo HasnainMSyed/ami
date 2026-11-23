@@ -10,7 +10,7 @@
     @font-face { font-family: "ami-inter"; src: url("fonts/inter.woff2") format("woff2"); font-weight: 300 700; }
     @font-face { font-family: "ami-grotesk"; src: url("fonts/space-grotesk.woff2") format("woff2"); font-weight: 300 700; }
     html, body { margin: 0; min-height: 100%; }
-    body.ami-root { background: radial-gradient(80% 60% at 20% 0%, var(--ami-accent-soft), transparent 70%), var(--ami-field); background-color: color-mix(in oklab, var(--ami-fg) 4%, Canvas); display: grid; place-items: center; padding: 48px 16px; }
+    body.ami-root { background: radial-gradient(80% 60% at 20% 0%, var(--ami-accent-soft), transparent 70%), var(--ami-field); background-color: color-mix(in oklab, var(--ami-fg) 4%, Canvas); display: grid; place-items: center; align-content: center; padding: 48px 16px; }
     .ami-card { width: min(480px, 100%); }
     .status { font: 500 13px/1.4 var(--ami-font); padding: 10px 12px; border-radius: 10px; background: var(--ami-field); color: var(--ami-muted); }
     .status.ok { color: var(--ami-accent); background: var(--ami-accent-soft); }
@@ -33,6 +33,16 @@
       <button type="button" class="ami-btn ami-btn-ghost" id="test">Test connection</button>
       <button type="submit" class="ami-btn ami-btn-primary">Save</button>
     </div>
+  </form>
+  <form class="ami-card ami-glass" id="prefs" style="margin-top:16px">
+    <header><span class="ami-orb"></span><div><span class="ami-eyebrow">Habits</span><p class="ami-title">How ami helps</p></div></header>
+    <label class="ami-label" style="flex-direction:row;align-items:center;gap:10px">
+      <input type="checkbox" id="cutChain"> Hide "up next", end screens and autoplay on YouTube and Bilibili</label>
+    <label class="ami-label" for="alts">Instead of watching, I could… (one per line)
+      <textarea class="ami-field" id="alts" rows="6" spellcheck="false"></textarea></label>
+    <p class="hint">These show up in "Ride it out" when you're blocked.</p>
+    <div class="ami-row" style="justify-content:flex-end"><span class="hint" id="prefsSaved" hidden>Saved.</span>
+      <button type="submit" class="ami-btn ami-btn-primary">Save</button></div>
   </form>
   <script src="options.js"></script>
 </body>

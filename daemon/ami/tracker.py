@@ -69,5 +69,6 @@ class Tracker:
         s.last_active = now
         s.last_title = hb.title or s.last_title
         s.last_site = hb.place
+        s.last_video = hb.video_id or s.last_video
         self.last_counted = now
         return dt
