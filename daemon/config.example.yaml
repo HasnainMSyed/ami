@@ -6,7 +6,7 @@ thresholds:                 # weighted minutes (learning x0.3, Shorts/feeds x1.5
   l1: 15                    # nudge
   l2: 25                    # pause + check-in chat
   l3: 40                    # step-away block
-  daily_budget: 90          # the goals card can override this per day
+  daily_budget: 60          # the goals card can override this per day
 
 quiet_hours: "23:30-07:00"  # "" to disable
 day_start: "04:00"
@@ -40,3 +40,14 @@ llm:
   # companion_provider: ollama
   # companion_base_url: http://127.0.0.1:11434
   # companion_model: gemma4:e4b
+
+# Video on these hosts (and subdomains) never counts: coursework and calls.
+# ignore_hosts: [q.utoronto.ca, instructure.com, play.library.utoronto.ca, meet.google.com, zoom.us,
+#                teams.microsoft.com, teams.live.com, discord.com]
+
+# chess.com. Leave username empty to turn chess rules off (games are still counted from the page).
+chess:
+  username: ""            # your public chess.com username; ami reads your public game history
+  daily_games: 10         # all formats; the next game is covered before a move, so it aborts
+  tilt_losses: 3          # this many losses in a row ...
+  tilt_cooldown_min: 30   # ... means a break this long (0 losses = off)

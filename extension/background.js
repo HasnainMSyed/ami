@@ -56,7 +56,7 @@ function genericHeartbeat(msg, sender) {
 
 // Every frame of the tab (embedded players included) gets the state so it can pause.
 function toFrames(tab, state) {
-  if (tab === undefined || !state || state.error) return;
+  if (tab === undefined || !state || state.error || state.scope === "chess") return;
   const prev = tabLevels.get(tab) ?? 0;
   tabLevels.set(tab, state.level ?? 0);
   if ((state.level ?? 0) >= 2 || prev >= 2) api.tabs.sendMessage(tab, { type: "state", state }).catch(() => {});
@@ -102,8 +102,9 @@ async function offlineReply(hb, reason) {
   const now = Date.now();
   const key = dayKey();
   const o = offline.day === key ? offline : { day: key, seconds: 0, last: 0 };
-  if (hb?.active && o.last) o.seconds += Math.min((now - o.last) / 1000, 22.5);
-  if (hb?.active) o.last = now;
+  const counts = hb?.active && hb.site !== "chess";
+  if (counts && o.last) o.seconds += Math.min((now - o.last) / 1000, 22.5);
+  if (counts) o.last = now;
   await api.storage.local.set({ offline: o });
   const over = o.seconds / 60 >= lastBudget;
   const setup = reason !== "daemon unreachable";
@@ -129,7 +130,7 @@ async function broadcast(state, exceptTab) {
 }
 
 async function remember(state, fromTab) {
-  if (!state || state.error) return;
+  if (!state || state.error || state.scope === "chess") return; // chess state stays on chess tabs
   if (state.stats?.budget_min) await api.storage.local.set({ lastBudget: state.stats.budget_min });
   if (state.level !== lastLevel) {
     lastLevel = state.level;

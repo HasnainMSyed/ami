@@ -48,6 +48,9 @@ class Day:
     grants_today: int = 0
     goals_prompted: bool = False
     budget_min: float | None = None  # today's budget from the goals card
+    chess_ids: list[str] = field(default_factory=list)          # today's games, in the order they started
+    chess_seen: dict[str, float] = field(default_factory=dict)  # game id -> when ami first saw it
+    chess_lock: str = ""                                        # reason of the current chess lock
 
     @property
     def weighted_min(self) -> float:

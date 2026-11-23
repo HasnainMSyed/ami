@@ -37,6 +37,11 @@
       else if (path.startsWith("/bangumi/play/")) { pageType = "watch"; videoId = path.split("/")[3] || null; }
       else if (host.startsWith("search.")) pageType = "search";
       else pageType = "feed"; // home, space., t., m. home
+    } else if (/(^|\.)chess\.com$/.test(host)) {
+      site = "chess";
+      const g = path.match(/^\/(?:game\/(?:live\/|daily\/)?|live\/game\/)(\d+)/);
+      if (g) { pageType = "game"; videoId = g[1]; }
+      else if (path === "/" || path.startsWith("/home") || path.startsWith("/play")) pageType = "lobby";
     } else if (/(^|\.)google\.[a-z.]+$/.test(host) && path === "/search" &&
                (u.searchParams.get("udm") === "7" || u.searchParams.get("tbm") === "vid")) {
       site = "google"; // the Videos tab: a feed for picking what to watch

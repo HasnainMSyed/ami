@@ -3,8 +3,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-SITES = {"youtube", "bilibili", "google", "web"}  # web = video on any other site (host says which)
-PAGE_TYPES = {"watch", "shorts", "feed", "search", "live", "other"}
+SITES = {"youtube", "bilibili", "google", "web", "chess"}  # web = video on any other site (host says which)
+PAGE_TYPES = {"watch", "shorts", "feed", "search", "live", "other", "game", "lobby"}
 
 
 @dataclass(frozen=True)

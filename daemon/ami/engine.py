@@ -12,8 +12,10 @@ from .brain.memory import Memory
 from .bus import Bus
 from .sensors.watchdog import Watchdog
 from .config import Config, host_ignored
+from .rules.chess import ChessDecision, evaluate_chess, exempt, next_day_start, see_game
 from .rules.doomscroll import Decision, evaluate
 from .sensors.browser import Heartbeat
+from .sensors.chess import ChessHistory, Game
 from .state import Day, Session
 from .store import Store
 from .tracker import Tracker, day_key
@@ -52,6 +54,10 @@ class Engine:
         self.watchdog = watchdog or (Watchdog(cfg.watchdog_silence_s, cfg.policy_files) if cfg.watchdog else None)
         self._episode_start = 0.0
         self._openings: dict[int, str] = {}
+        self.chess = ChessHistory(cfg.chess.username, cfg.day_start) if cfg.chess.username else None
+        if self.chess and (saved := store.get_kv("chess_games")):
+            self.chess.load(saved)
+        self._chess_beat = 0.0
         self.tracker = Tracker(cfg, *self._restore())
         self.tracker.roll(clock())
         self._save_ended()
@@ -72,7 +78,7 @@ class Engine:
     def attach(self, http) -> None:
         """Give every component that talks to a model the shared HTTP session."""
         self.classifier.attach(http)
-        for part in (self.companion, self.llm):
+        for part in (self.companion, self.llm, self.chess):
             if hasattr(part, "attach"):
                 part.attach(http)
 
@@ -87,6 +93,8 @@ class Engine:
     # sensor input
     def heartbeat(self, hb: Heartbeat) -> dict:
         now = self.clock()
+        if hb.site == "chess":
+            return self.chess_heartbeat(hb, now)
         if hb.site == "web" and host_ignored(hb.host, self.cfg.ignore_hosts):
             return self._payload(Decision(0, "ignored"), now, False, hb)
         kind = self.classifier.kind_for(hb)
@@ -107,6 +115,11 @@ class Engine:
         if self.watchdog:
             for kind, payload in self.watchdog.check(now):
                 self._on_watchdog(kind, payload, now)
+        if self.chess:
+            recent = now - self._chess_beat < 120
+            every = self.cfg.chess.poll_active_s if recent else self.cfg.chess.poll_idle_s
+            if now - self.chess.last_poll >= every:
+                self._spawn(self._poll_chess(now))
         self._persist()
 
     @staticmethod
@@ -140,6 +153,61 @@ class Engine:
         elif kind == "policy_changed":
             self.desktop.notify("ami's browser policy changed", p["path"], "critical")
             self.desktop.speak("Someone changed ami's browser settings.")
+
+    # chess
+    async def _poll_chess(self, now: float) -> None:
+        assert self.chess
+        if await self.chess.poll(now):
+            self.store.put_kv("chess_games", self.chess.dump())
+            self._chess_decide(self.clock())  # announce a lock as soon as the result is known
+            self._persist()
+
+    def _chess_finished_today(self, now: float) -> list[Game]:
+        if not self.chess:
+            return []
+        return self.chess.since(next_day_start(now, self.cfg.day_start) - 86400)
+
+    def _chess_decide(self, now: float) -> tuple[ChessDecision, list[Game]]:
+        day = self.tracker.day
+        finished = self._chess_finished_today(now)
+        d = evaluate_chess(day, finished, now, self.cfg)
+        reason = d.reason if d.locked else ""
+        if reason != day.chess_lock:
+            day.chess_lock = reason
+            self.bus.publish("chess_lock" if reason else "chess_unlock",
+                             {"reason": reason, "games": d.games, "streak": d.streak, "until": d.until})
+            if reason == "cap":
+                self.desktop.notify("Chess is done for today", f"That was game {d.games} of {d.cap}.", "critical")
+                self.desktop.speak(f"That's {d.games} games. Chess is done for today.")
+            elif reason == "tilt":
+                self.desktop.notify("Chess break", f"{d.streak} losses in a row. Back at {_hhmm(d.until)}.", "critical")
+                self.desktop.speak(f"{d.streak} losses in a row. Take a break until {_hhmm(d.until)}.")
+        return d, finished
+
+    def chess_heartbeat(self, hb: Heartbeat, now: float) -> dict:
+        self.tracker.roll(now)
+        self._save_ended()
+        day = self.tracker.day
+        if hb.active:
+            self._chess_beat = now
+        if hb.page_type == "game" and hb.video_id and see_game(day, hb.video_id, now):
+            self.bus.publish("chess_game", {"id": hb.video_id, "n": len(day.chess_ids)})
+        d, finished = self._chess_decide(now)
+        if d.locked and not exempt(day, hb.video_id if hb.page_type == "game" else None,
+                                   {g.id for g in finished}, d, self.cfg):
+            ui = {"kind": "chess_locked", "reason": d.reason, "until": d.until, "until_label": _hhmm(d.until),
+                  "games": d.games, "cap": d.cap, "streak": d.streak}
+        elif not d.locked and d.left <= 2 and hb.page_type != "game":
+            ui = {"kind": "chess_note", "games": d.games, "cap": d.cap, "left": d.left, "streak": d.streak}
+        else:
+            ui = {"kind": "none"}
+        self._persist()
+        return {"scope": "chess", "level": 0, "ui": ui, "chess": self._chess_stats(d)}
+
+    @staticmethod
+    def _chess_stats(d: ChessDecision) -> dict:
+        return {"games": d.games, "cap": d.cap, "left": d.left, "streak": d.streak,
+                "locked": d.locked, "reason": d.reason, "until": d.until or None}
 
     # decisions
     def _decide(self, now: float, active: bool, hb: Heartbeat | None = None) -> dict:
@@ -216,6 +284,7 @@ class Engine:
             "lock_reason": day.lock_reason,
             "site": s.last_site if s else "",
             "title": s.last_title if s else "",
+            "chess_games": len(day.chess_ids),
         }
 
     def _opening(self, level: int, ctx: dict) -> str:
@@ -350,4 +419,5 @@ class Engine:
             "lock_until": day.lock_until or None,
             "overruns": day.grant_overruns,
             "watching": {"site": ctx["site"], "title": ctx["title"]} if self.tracker.session else None,
+            "chess": self._chess_stats(evaluate_chess(day, self._chess_finished_today(now), now, self.cfg)),
         }

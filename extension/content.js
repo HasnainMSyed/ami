@@ -190,6 +190,30 @@
         <h2 class="ami-display">${ui.offline ? "ami can't reach its service." : ui.reason === "quiet_hours" ? "It's late. You asked me to hold the line." : "You've had your break today."}</h2>
         ${chatSheet(ui.opening, ui.offline ? "Offline mode" : "Exceptions need a specific reason", null, !ui.offline)}
       </div></div>`,
+    chess_locked: (ui) => {
+      const head = ui.reason === "cap" ? `That's ${n(ui.games)} games today.`
+        : ui.reason === "tilt" ? `${n(ui.streak)} losses in a row.`
+        : "It's late. Chess can wait for tomorrow.";
+      const body = ui.reason === "cap" ? `Your limit is ${n(ui.cap)}. The board opens again tomorrow.`
+        : ui.reason === "tilt" ? "The next game won't be the one that fixes it. Step away; the board opens again after the break."
+        : "Quiet hours are on. Sleep is the best thing you can do for your rating.";
+      return `
+      <div class="ami-block" role="dialog" aria-label="Chess is closed"><div class="ami-block-inner ami-enter">
+        <span class="ami-orb lg"></span>
+        <span class="ami-lock">${ICON_LOCK}${ui.reason === "cap" ? "Closed until tomorrow" : `Closed until ${esc(ui.until_label)}`}</span>
+        <h2 class="ami-display">${esc(head)}</h2>
+        <p class="ami-text">${esc(body)}</p>
+        <div class="ami-stats"><span class="ami-stat">Games today <b>${n(ui.games)} / ${n(ui.cap)}</b></span>
+          ${ui.streak ? `<span class="ami-stat">Loss streak <b>${n(ui.streak)}</b></span>` : ""}</div>
+      </div></div>`;
+    },
+    chess_note: (ui) => `
+      <div class="ami-toast ami-glass ami-enter" role="status"><span class="ami-orb"></span>
+        <div class="ami-body">
+          <div><p class="ami-title">${n(ui.left) === 1 ? "Last game today" : `${n(ui.left)} games left today`}</p>
+            <p class="ami-text">${n(ui.games)} of ${n(ui.cap)} played${ui.streak ? ` · ${n(ui.streak)} ${n(ui.streak) === 1 ? "loss" : "losses"} in a row` : ""}. Make ${n(ui.left) === 1 ? "it" : "them"} count.</p></div>
+          <div class="ami-row"><button class="ami-btn ami-btn-ghost" data-act="hide_note">OK</button></div>
+        </div></div>`,
   };
 
   // ---------- render ----------
@@ -197,7 +221,8 @@
     if (!next || next.error || !next.ui) return;
     state = next;
     const ui = state.ui;
-    const key = `${ui.kind}|${state.level}|${ui.lock_label || ""}|${ui.offline ? 1 : 0}`;
+    const key = `${ui.kind}|${state.level}|${ui.lock_label || ui.until_label || ""}|${ui.offline ? 1 : 0}|${ui.games ?? ""}`;
+    if (ui.kind === "chess_note" && hiddenNote === key) return;
     if (blocking()) startEnforcing(); else stopEnforcing();
     if (key === renderedKey) return; // keep the chat thread as it is
     renderedKey = key;
@@ -287,8 +312,10 @@
     return el;
   }
 
+  let hiddenNote = "";
   async function act(action) {
     if (action === "options") return send({ type: "openOptions" });
+    if (action === "hide_note") { hiddenNote = renderedKey; renderedKey = ""; if (layer) layer.innerHTML = ""; return; }
     if (action === "stop") pauseAll();
     const r = await send({ type: "ack", action });
     if (r && !r.error) apply(r);

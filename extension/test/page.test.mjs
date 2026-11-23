@@ -65,3 +65,15 @@ test("coursework and calls never count", () => {
   assert.ok(!isIgnored("https://www.google.com/search?q=x&udm=7"));
   assert.ok(isIgnored("https://example.org/", ["example.org"]));
 });
+
+test("chess.com pages", () => {
+  assert.deepEqual(
+    [detectPage("https://www.chess.com/game/live/146512345678", "x").page_type, detectPage("https://www.chess.com/game/live/146512345678", "x").video_id],
+    ["game", "146512345678"]);
+  assert.equal(detectPage("https://www.chess.com/game/146512345678", "x").video_id, "146512345678");
+  assert.equal(detectPage("https://www.chess.com/game/daily/9876", "x").video_id, "9876");
+  assert.equal(detectPage("https://www.chess.com/play/online", "x").page_type, "lobby");
+  assert.equal(detectPage("https://www.chess.com/home", "x").page_type, "lobby");
+  assert.equal(detectPage("https://www.chess.com/puzzles/rated", "x").page_type, "other");
+  assert.equal(detectPage("https://www.chess.com/puzzles/rated", "x").site, "chess");
+});

@@ -52,6 +52,16 @@ class LLM:
 
 
 @dataclass
+class Chess:
+    username: str = ""          # your chess.com username (public); empty turns chess rules off
+    daily_games: int = 10       # all formats; game number daily_games + 1 is covered before a move
+    tilt_losses: int = 3        # this many losses in a row ...
+    tilt_cooldown_min: int = 30  # ... means a break this long. 0 losses disables it.
+    poll_active_s: int = 30     # how often to check chess.com while a chess tab is in use
+    poll_idle_s: int = 900
+
+
+@dataclass
 class Config:
     host: str = "127.0.0.1"
     port: int = 47821
@@ -87,6 +97,7 @@ class Config:
     thresholds: Thresholds = field(default_factory=Thresholds)
     weights: Weights = field(default_factory=Weights)
     llm: LLM = field(default_factory=LLM)
+    chess: Chess = field(default_factory=Chess)
 
 
 def _merge(obj, data: dict) -> None:
